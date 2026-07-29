@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  INSTITUTE_ADMIN
+  TEACHER
+  STUDENT
+}
+
+model Institute {
+  id             String   @id @default(uuid())
+  name           String
+  slug           String   @unique
+  logo           String?
+  primaryColor   String   @default("#3B82F6")
+  secondaryColor String   @default("#10B981")
+  bannerImage    String?
+  contactEmail   String
+  contactPhone   String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users         User[]
+  courses       Course[]
+  announcements Announcement[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model User {
+  id          String   @id @default(uuid())
+  instituteId String?  // Null for SUPER_ADMIN
+  email       String
+  password    String   // Hashed with bcrypt
+  firstName   String
+  lastName    String
+  phone       String?
+  role        UserRole
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  institute      Institute?      @relation(fields: [instituteId], references: [id])
+  teacherCourses Course[]        @relation("TeacherCourses")
+  enrollments    Enrollment[]
+  testAttempts   TestAttempt[]
+  videoProgress  VideoProgress[]
+  attendances    Attendance[]
+
+  @@unique([instituteId, email])
+  @@index([email])
+  @@index([instituteId])
+  @@index([role])
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  instituteId String
+  title       String
+  description String?  @db.Text
+  price       Float    @default(0)
+  thumbnail   String?
+  teacherId   String
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  institute   Institute    @relation(fields: [instituteId], references: [id])
+  teacher     User         @relation("TeacherCourses", fields: [teacherId], references: [id])
+  lessons     Lesson[]
+  enrollments Enrollment[]
+  tests       Test[]
+  liveClasses LiveClass[]
+  attendances Attendance[]
+
+  @@index([instituteId])
+  @@index([teacherId])
+  @@index([isPublished])
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  courseId    String
+  title       String
+  description String?  @db.Text
+  videoUrl    String?
+  pdfUrl      String?
+  order       Int      @default(0)
+  duration    Int?     // Duration in seconds
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course        Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  videoProgress VideoProgress[]
+
+  @@index([courseId])
+  @@index([courseId, order])
+}
+
+model Enrollment {
+  id         String   @id @default(uuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+
+  student User   @relation(fields: [studentId], references: [id])
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  courseId  String
+  studentId String
+  date      DateTime
+  isPresent Boolean  @default(true)
+  remarks   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId, date])
+  @@index([courseId])
+  @@index([studentId])
+  @@index([date])
+}
+
+model Test {
+  id           String   @id @default(uuid())
+  courseId     String
+  title        String
+  description  String?  @db.Text
+  duration     Int?     // Duration in minutes
+  totalMarks   Int
+  passingMarks Int
+  isPublished  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions Question[]
+  attempts  TestAttempt[]
+
+  @@index([courseId])
+  @@index([isPublished])
+}
+
+model Question {
+  id            String @id @default(uuid())
+  testId        String
+  question      String @db.Text
+  options       Json   // Array of options
+  correctAnswer Int    // Index of correct option (0-3)
+  marks         Int
+  order         Int    @default(0)
+
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([testId, order])
+}
+
+model TestAttempt {
+  id          String   @id @default(uuid())
+  testId      String
+  studentId   String
+  answers     Json     // { "questionId": selectedOptionIndex }
+  score       Int
+  totalMarks  Int
+  passed      Boolean
+  attemptedAt DateTime @default(now())
+
+  test    Test @relation(fields: [testId], references: [id])
+  student User @relation(fields: [studentId], references: [id])
+
+  @@index([testId])
+  @@index([studentId])
+  @@index([studentId, testId])
+}
+
+model VideoProgress {
+  id              String   @id @default(uuid())
+  studentId       String
+  lessonId        String
+  watchedDuration Int      @default(0)
+  completed       Boolean  @default(false)
+  lastWatchedAt   DateTime @default(now())
+
+  student User   @relation(fields: [studentId], references: [id])
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lessonId])
+  @@index([studentId])
+  @@index([lessonId])
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  instituteId String
+  title       String
+  content     String   @db.Text
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  institute Institute @relation(fields: [instituteId], references: [id])
+
+  @@index([instituteId])
+  @@index([instituteId, isPublished])
+  @@index([createdAt])
+}
+
+model LiveClass {
+  id          String   @id @default(uuid())
+  courseId    String
+  title       String
+  description String?  @db.Text
+  meetingLink String
+  scheduledAt DateTime
+  duration    Int      // Duration in minutes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([scheduledAt])
+}

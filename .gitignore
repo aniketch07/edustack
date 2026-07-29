@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database
+backend/data/dev-store.json
+*.db
+*.sqlite
+
+# Testing
+coverage/
+
+# Misc
+.cache/
+.turbo/
+
+# Documentation (internal — not part of the shipped product)
+docs/
+
+# Root markdown files (except README)
+/*.md
+!/README.md

@@ -1,0 +1,181 @@
+🚨 PART 1: Things NOT Right for the MVP (Bugs & Issues)
+
+🔴 Critical Bugs
+
+1. Hardcoded dev store password in memory (rawPassword)
+institutes.service.ts stores rawPassword: adminPassword on the in-memory user objects. auth.service.ts fallbackLogin checks memUser.rawPassword (plaintext) against memUser.password (bcrypt). If the DB is down, any user with a bcrypt-hashed password can't login because rawPassword is only set during that session's creation — on server restart, loadDevStore() loads users with bcrypt password but NO rawPassword, making all offline/restored users unable to login.
+
+- Files: backend/src/auth/auth.service.ts:112, backend/src/institutes/institutes.service.ts:133, backend/src/users/users.service.ts:68
+
+2. Duplicate records from dev store + DB merge
+Every "findAll" method returns [...dbRecords, ...memoryMatches] — when both DB and dev store have the same records (e.g., after DB comes back online), users see duplicates on every list.
+
+- Files: Every service — institutes.service.ts:199, courses.service.ts:133, lessons.service.ts:116, enrollments.service.ts:134, etc.
+
+3. syncStore() doesn't pass ALL keys, silently dropping data
+Each module's syncStore() function only passes a subset of keys. For example, courses.service.ts:17 does:
+saveDevStore({ institutes: MEMORY_INSTITUTES, users: MEMORY_USERS, courses: MEMORY_COURSES });
+This drops enrollments, lessons, attendance, tests, announcements, live classes, video progress every time a course is created. Same pattern in every module — overwriting the dev store with a partial snapshot.
+
+4. Super Admin can't access institutes via API when DB fails
+findAll() in institutes service throws if DB fails AND the memory array is empty — no graceful fallback to a seeded default.
+
+5. Attendance model uses DateTime for date field, unique constraint breaks
+The @@unique([courseId, studentId, date]) on Attendance uses full DateTime. If a teacher marks attendance for the same student on the same day but at a slightly different time (2026-07-28T10:00:00Z vs 2026-07-28T11:00:00Z), the upsert creates a duplicate rather than updating.
+
+🟠 Security Issues
+
+6. Plaintext passwords in localStorage
+User object stored in localStorage includes sensitive fields. While password isn't there, the Institute object is exposed with full details. No encryption on client storage.
+
+7. No token expiry validation on frontend
+auth.ts sets a cookie with max-age=86400 (24h) but the JWT token itself has no expiry configured anywhere in the JWT strategy. Tokens never expire.
+
+- File: backend/src/auth/strategies/jwt.strategy.ts — likely missing expiresIn in JWT sign options
+
+8. CORS origin is environment-dependent but no .env.example exists
+main.ts reads process.env.FRONTEND_URL but there's no .env.example or .env documentation. If someone deploys without setting it, CORS falls back to localhost:3000 and breaks.
+
+9. Super Admin password admin123 is hardcoded
+In seed.ts AND in the dev store fallback. 1-click demo login on the login page exposes it directly. Anyone who accesses the login page can see all accounts.
+
+10. Courses controller allows TEACHER to delete courses — no, wait, it doesn't ✅ CORRECT: DELETE is @Roles(UserRole.INSTITUTE_ADMIN) only. But PATCH allows TEACHER to update courses (including reassigning teachers), which they shouldn't be able to do.
+
+11. Test questions expose correctAnswer to the frontend
+In tests.service.ts:135, findByCourse selects correctAnswer: true in the question results. Students can inspect the API response to see the right answer before starting.
+
+🟡 UX & Logic Issues
+
+12. Student "Retake Test" button doesn't create a new attempt — it shows the old result
+When a student clicks "Start Test" on a previously taken test, the modal opens. But submitting again simply creates a NEW attempt — the old lastAttempt is only used for display, not to prevent retakes. No retake limit or cooldown.
+
+13. No enrollment count validation
+The enroll student flow replaces ALL enrollments for a course (enrollments.service.ts:79-83 deletes then re-adds). If the API call fails mid-way, some students lose their enrollment. This is a destructive overwrite, not an additive operation.
+
+14. Student attendance defaults to 100% with no data
+When getStudentAttendance finds 0 records, it returns percentage: 100. A student with no attendance marks looks like perfect attendance. Should be 0 or N/A.
+
+15. No loading/empty states on announcement banners
+If announcements API fails, teacher and student dashboards silently catch the error. The dashboard shows no announcements but also no error — the user doesn't know if announcements failed to load or there genuinely are none.
+
+16. Course creation assigns the first found teacher, not a valid one
+courses.service.ts:45-49: if no teacherId is provided, it picks this.prisma.user.findFirst({ where: { instituteId } }) — this could be a STUDENT, not necessarily a teacher.
+
+17. Live classes findByCourse doesn't filter past sessions
+All live classes (past and future) are shown. A student sees "Upcoming Live Class Alerts" for sessions that happened last week.
+
+🟣 Code Quality Issues
+
+18. catch (e) {} silent swallows everywhere
+Almost every catch block in the codebase has an empty body or only a this.logger.warn(). If the DB fails silently and the dev store also has an error, the user gets a 200 OK with no data and no indication anything went wrong.
+
+19. loadDevStore and saveDevStore are synchronous but the file operations are async
+dev-store.ts uses synchronous fs.readFileSync/fs.writeFileSync. This blocks the event loop on every API call.
+
+20. No input sanitization on text fields
+Description, title, content fields accept arbitrary HTML/script tags. Stored XSS is possible if content is rendered without escaping (e.g., in announcement banners).
+
+21. Mix of thumbnail and thumbnailUrl field names
+Schema has thumbnail (String?), but frontend checks course.thumbnailUrl || course.thumbnail. The DTO has both @IsOptional() thumbnailUrl? and @IsOptional() thumbnail?. This is inconsistent.
+
+22. Page metadata says "Create Next App"
+layout.tsx still has the default Next.js metadata: title: "Create Next App" and description: "Generated by create next app".
+
+23. No TypeScript strict mode in any config
+Both tsconfig.json files likely don't have strict: true — the heavy use of any types throughout confirms this.
+
+24. Circular imports through dev-store
+Each service imports from other services' MEMORY_* variables. lessons.service.ts imports from live-classes.service.ts, which imports from lessons.service.ts — this is a circular dependency chain that works only because of JavaScript's module caching.
+
+---
+✨ PART 2: Features Worth Adding Early
+
+👑 High Impact / Low Effort
+
+1. Bulk CSV Student Import
+Institute admins upload a CSV with student names/emails/passwords. Compose rows from the list, batch-create accounts. Could handle 50+ students in one go instead of one-by-one.
+
+2. Forgot Password Flow (UI)
+Backend DTOs exist but no frontend. Add a "Forgot Password?" link on login, a simple form that accepts email, and a "Check your inbox" message. Wire to SendGrid later.
+
+3. Student Test History Page
+Students can see all their past attempts, scores, and pass/fail across courses. Currently only the last attempt is shown per test.
+
+4. Publish/Unpublish Toggle on Test
+Tests auto-publish on creation. Give teachers a publish toggle so they can create tests in draft mode first.
+
+5. Teacher Dashboard Analytics
+Add simple stats: average test scores across students, attendance trends, most-watched lessons. All data is already in the DB — just need a summary API.
+
+6. Video Lecture Duration Display
+Show video duration on lesson cards. The duration field exists in the Lesson model, but it's never displayed on the frontend.
+
+📱 Medium Impact / Medium Effort
+
+7. Role-Specific Landing pages
+When logged in, the root / redirects the user to their role dashboard. Currently it just shows the generic landing page.
+
+8. Toast Notification System
+Every success/error currently uses alert() (native browser dialog) or a temporary inline message. A toast system would be far less intrusive.
+
+9. Course Categories / Tags
+Let admins tag courses (e.g., "JEE", "NEET", "Class 11", "Physics") and let students filter by tags. Simple text field on Course, no new tables needed.
+
+10. Student Dashboard Progress Summary
+On the main student dashboard, show overall progress across ALL courses (e.g., "45% complete across 3 courses"), not just per-course.
+
+11. Attendance Report Export
+Download attendance sheet as CSV/PDF for a given course and date range. Useful for institutes to maintain physical records.
+
+12. Edit Lesson Content
+Teachers can't edit a lesson after uploading. They have to delete and re-create. Add an edit modal with pre-filled fields.
+
+13. Teacher Profile Page
+Show teacher's assigned courses, their students, and quick stats. Currently teachers are just a name in a table.
+
+🏗️ MVP-Pipeline Blockers
+
+14. File Upload Handler (S3/R2)
+This is the biggest remaining MVP gap. Currently everything is URL-based. For real institutes, teachers need to upload videos and PDFs directly. Without this, you can't launch.
+
+15. Payment Gateway Integration
+Courses have a price field but no way to collect payments. Even if you defer this, you need at least a "Request Payment" flow or a note saying "Contact institute for payment."
+
+16. Health Check Endpoint
+Before deploying, add GET /api/v1/health that returns DB status, uptime, memory usage. Essential for monitoring.
+
+17. Rate Limiting
+No rate limiting on any endpoint. A malicious actor could hit /auth/login with brute-force attempts or spam the announcements API.
+
+🧼 Quick Fixes (Do ASAP)
+
+┌─────┬──────────────────────────────────────────────────────────────┬────────┐
+│  #  │                             Fix                              │ Effort │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 1   │ Fix title metadata in layout.tsx                             │ 1 min  │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 2   │ Add expiresIn to JWT signing                                 │ 5 min  │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 3   │ Remove correctAnswer from test GET API response              │ 5 min  │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 4   │ Filter past live classes from "upcoming" sections            │ 15 min │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 5   │ Change attendance default 100% → 0% when no records          │ 5 min  │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 6   │ Fix dev store syncStore() to pass all keys                   │ 20 min │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 7   │ Add .env.example file                                        │ 2 min  │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 8   │ Add @IsUrl() validation on video/meeting link fields         │ 10 min │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 9   │ Remove rawPassword from user storage (use bcrypt check only) │ 15 min │
+├─────┼──────────────────────────────────────────────────────────────┼────────┤
+│ 10  │ Deduplicate DB + memory results by ID                        │ 30 min │
+└─────┴──────────────────────────────────────────────────────────────┴────────┘
+
+---
+📊 Verdict
+
+Your codebase is feature-complete for an MVP demo — but it has a dev store data corruption bug (#3 in critical bugs) that WILL lose data in production. The duplicate records bug (#2) makes any DB reconnect break the UI. The hardcoded demo credentials (#9) and infinite JWT tokens (#7) are security issues that prevent production deployment.
+
+Cost to fix everything above: ~2-3 days of focused work. The structural dev-store issues are the hardest; the rest are quick.   
