@@ -11,9 +11,9 @@ import * as bcrypt from 'bcrypt';
 
 const SUPER_ADMIN_FALLBACK = {
   id: 'super-admin-uuid-1',
-  email: 'admin@edustack.com',
-  password: 'admin123',
-  firstName: 'Super',
+  email: process.env.SUPER_ADMIN_EMAIL || 'aniket@edustack.com',
+  password: process.env.SUPER_ADMIN_PASSWORD || 'Aniket@1221@',
+  firstName: 'Aniket',
   lastName: 'Admin',
   role: UserRole.SUPER_ADMIN,
   instituteId: null,

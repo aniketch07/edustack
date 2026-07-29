@@ -165,46 +165,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Quick Demo Fill Presets */}
-            <div className="mt-6 pt-6 border-t border-slate-800/80">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
-                ⚡ 1-Click Demo Login Presets
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => fillDemoUser('admin@edustack.com', 'admin123')}
-                  className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 text-slate-300 text-left transition"
-                >
-                  <div className="font-semibold text-blue-400">Super Admin</div>
-                  <div className="text-[10px] text-slate-500 truncate">admin@edustack.com</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoUser('admin@democoaching.com', 'admin123')}
-                  className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 text-slate-300 text-left transition"
-                >
-                  <div className="font-semibold text-emerald-400">Institute Admin</div>
-                  <div className="text-[10px] text-slate-500 truncate">admin@democoaching.com</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoUser('teacher@democoaching.com', 'teacher123')}
-                  className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-teal-500/50 text-slate-300 text-left transition"
-                >
-                  <div className="font-semibold text-teal-400">Teacher</div>
-                  <div className="text-[10px] text-slate-500 truncate">teacher@democoaching.com</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoUser('student@democoaching.com', 'student123')}
-                  className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 text-slate-300 text-left transition"
-                >
-                  <div className="font-semibold text-purple-400">Student</div>
-                  <div className="text-[10px] text-slate-500 truncate">student@democoaching.com</div>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </main>
