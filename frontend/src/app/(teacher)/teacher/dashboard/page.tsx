@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Users, Video, FileText, HelpCircle, LogOut, Search, UserCheck, CheckCircle2, Plus, Calendar, FilePlus, Trash2, Clock, Award, Megaphone, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { BookOpen, Users, Video, FileText, HelpCircle, LogOut, Search, UserCheck, CheckCircle2, Plus, Calendar, FilePlus, Trash2, Clock, Award, Megaphone, ExternalLink, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
@@ -362,9 +362,19 @@ export default function TeacherDashboard() {
 
   const instLogo = currentUser?.institute?.logoUrl;
 
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-400 flex flex-col items-center justify-center text-xs gap-3">
+        <Loader2 className="w-6 h-6 text-teal-400 animate-spin" />
+        <span>Loading faculty workspace...</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+      {/* Header Bar */}
+      <header className="h-16 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
           {instLogo ? (
             <img
@@ -377,72 +387,93 @@ export default function TeacherDashboard() {
               {(currentUser?.institute?.name || 'D')[0]}
             </div>
           )}
-          <span className="font-bold text-lg text-white">
-            {currentUser?.institute?.name || 'Demo Coaching Academy'}
+          <span className="font-bold text-base sm:text-lg text-white tracking-tight">
+            {currentUser?.institute?.name || 'Faculty Workspace'}
           </span>
-          <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20 text-xs font-semibold">
+          <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 text-xs font-semibold">
             Teacher Workspace
           </span>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-white">{currentUser?.firstName} {currentUser?.lastName}</p>
-            <p className="text-xs text-slate-400">{currentUser?.email}</p>
+            <p className="text-xs sm:text-sm font-semibold text-white">
+              {currentUser?.firstName} {currentUser?.lastName}
+            </p>
+            <p className="text-[11px] text-slate-400">{currentUser?.email}</p>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/20 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/20 transition-all active:scale-95 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Logout
+            <span>Logout</span>
           </button>
         </div>
       </header>
 
-      <div className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-8">
-        <div className="flex justify-between items-center">
+      {/* Main Container */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8">
+        {/* Title & Refresh Control */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Faculty Dashboard</h1>
-            <p className="text-slate-400 text-sm mt-1">Manage video lectures, study notes, schedule live classes, create MCQ tests, and mark attendance.</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Faculty Dashboard</h1>
+            <p className="text-slate-400 text-xs sm:text-sm mt-1">
+              Manage video lectures, study notes, schedule live sessions, build MCQ tests, and track attendance.
+            </p>
           </div>
+          <button
+            onClick={fetchDashboardData}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer"
+          >
+            <Clock className="w-3.5 h-3.5 text-teal-400" />
+            <span>Refresh Workspace</span>
+          </button>
         </div>
 
         {/* Overview Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-teal-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-teal-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Assigned Courses</span>
-              <BookOpen className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Assigned Courses</span>
+              <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 group-hover:scale-110 transition-transform">
+                <BookOpen className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-white mt-2">{assignedCourses.length}</div>
-            <div className="text-xs text-slate-400 mt-1">Active assigned courses</div>
+            <div className="text-3xl font-black text-white mt-3">{assignedCourses.length}</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Active assigned courses</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-blue-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-blue-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Enrolled Students</span>
-              <Users className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Enrolled Students</span>
+              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 group-hover:scale-110 transition-transform">
+                <Users className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-white mt-2">{totalStudentsAcrossCourses}</div>
-            <div className="text-xs text-slate-400 mt-1">Across assigned courses</div>
+            <div className="text-3xl font-black text-white mt-3">{totalStudentsAcrossCourses}</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Across assigned courses</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-emerald-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Live Classes</span>
-              <Video className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Live Classes</span>
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform">
+                <Video className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-emerald-400 mt-2">{scheduledLiveClasses.length}</div>
-            <div className="text-xs text-slate-400 mt-1">Scheduled sessions</div>
+            <div className="text-3xl font-black text-emerald-400 mt-3">{scheduledLiveClasses.length}</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Scheduled sessions</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-amber-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">MCQ Test Engine</span>
-              <HelpCircle className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">MCQ Test Engine</span>
+              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
+                <HelpCircle className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-amber-400 mt-2">Ready</div>
-            <div className="text-xs text-amber-400 mt-1 font-semibold">Timed tests & auto-grading</div>
+            <div className="text-3xl font-black text-amber-400 mt-3">Ready</div>
+            <div className="text-xs text-amber-400 mt-2 font-semibold">Timed tests & auto-grading</div>
           </div>
         </div>
 
@@ -634,8 +665,8 @@ export default function TeacherDashboard() {
 
       {/* Schedule Live Class Modal */}
       {selectedCourseForLiveClass && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2 text-emerald-400">
                 <Video className="w-5 h-5" />
@@ -644,15 +675,18 @@ export default function TeacherDashboard() {
                   <p className="text-xs text-slate-400">{selectedCourseForLiveClass.title}</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedCourseForLiveClass(null)} className="text-slate-400 hover:text-white text-xs">
-                ✕
+              <button
+                onClick={() => setSelectedCourseForLiveClass(null)}
+                className="text-slate-400 hover:text-white p-1 transition"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {liveClassSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4" />
-                {liveClassSuccess}
+                <span>{liveClassSuccess}</span>
               </div>
             )}
 
@@ -665,7 +699,7 @@ export default function TeacherDashboard() {
                   onChange={(e) => setLiveTitle(e.target.value)}
                   placeholder="e.g., Live Doubt Clearing Session: Chapter 2"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
 
@@ -677,7 +711,7 @@ export default function TeacherDashboard() {
                   onChange={(e) => setMeetingLink(e.target.value)}
                   placeholder="https://meet.google.com/abc-defg-hij or Zoom link"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
 
@@ -689,7 +723,7 @@ export default function TeacherDashboard() {
                     value={scheduledAt}
                     onChange={(e) => setScheduledAt(e.target.value)}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   />
                 </div>
 
@@ -701,7 +735,7 @@ export default function TeacherDashboard() {
                     value={liveDuration}
                     onChange={(e) => setLiveDuration(Number(e.target.value))}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   />
                 </div>
               </div>
@@ -710,16 +744,23 @@ export default function TeacherDashboard() {
                 <button
                   type="button"
                   onClick={() => setSelectedCourseForLiveClass(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingLiveClass}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
-                  {submittingLiveClass ? 'Scheduling...' : 'Schedule Live Session'}
+                  {submittingLiveClass ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Scheduling...</span>
+                    </>
+                  ) : (
+                    <span>Schedule Live Session</span>
+                  )}
                 </button>
               </div>
             </form>

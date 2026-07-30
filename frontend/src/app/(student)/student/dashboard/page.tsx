@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Video, FileText, Calendar, LogOut, Search, UserCheck, Play, Download, CheckCircle2, XCircle, Award, HelpCircle, Clock, CheckSquare, Megaphone, ExternalLink, Check, Image as ImageIcon } from 'lucide-react';
+import { BookOpen, Video, FileText, Calendar, LogOut, Search, UserCheck, Play, Download, CheckCircle2, XCircle, Award, HelpCircle, Clock, CheckSquare, Megaphone, ExternalLink, Check, Image as ImageIcon, X, Loader2 } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
@@ -270,12 +270,23 @@ export default function StudentDashboard() {
         </div>
       </header>
 
-      <div className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-8">
-        <div className="flex justify-between items-center">
+      {/* Main Container */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8">
+        {/* Title & Refresh Control */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Student Learning Dashboard</h1>
-            <p className="text-slate-400 text-sm mt-1">Access your enrolled courses, watch video lectures, join scheduled live classes, download notes, and take tests.</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Student Learning Dashboard</h1>
+            <p className="text-slate-400 text-xs sm:text-sm mt-1">
+              Access your enrolled courses, watch video lectures, join scheduled live classes, download notes, and take tests.
+            </p>
           </div>
+          <button
+            onClick={fetchStudentData}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer"
+          >
+            <Clock className="w-3.5 h-3.5 text-blue-400" />
+            <span>Refresh Portal</span>
+          </button>
         </div>
 
         {/* Upcoming Live Classes Alert Banner */}
@@ -345,44 +356,52 @@ export default function StudentDashboard() {
 
         {/* Overview Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-blue-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-blue-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Enrolled Courses</span>
-              <BookOpen className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Enrolled Courses</span>
+              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 group-hover:scale-110 transition-transform">
+                <BookOpen className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-white mt-2">{enrolledCourses.length}</div>
-            <div className="text-xs text-slate-400 mt-1">Allocated by Institute</div>
+            <div className="text-3xl font-black text-white mt-3">{enrolledCourses.length}</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Allocated by Institute</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-emerald-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Attendance Score</span>
-              <Award className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Attendance Score</span>
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform">
+                <Award className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-emerald-400 mt-2">
+            <div className="text-3xl font-black text-emerald-400 mt-3">
               {overallAttendance?.percentage !== null && overallAttendance?.percentage !== undefined
                 ? `${overallAttendance.percentage}%`
                 : 'N/A'}
             </div>
-            <div className="text-xs text-slate-400 mt-1">Overall Present rate</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Overall Present rate</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-teal-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-teal-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Live Classes</span>
-              <Video className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Live Classes</span>
+              <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 group-hover:scale-110 transition-transform">
+                <Video className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-teal-400 mt-2">{upcomingLiveSessions.length}</div>
-            <div className="text-xs text-slate-400 mt-1">Scheduled sessions</div>
+            <div className="text-3xl font-black text-teal-400 mt-3">{upcomingLiveSessions.length}</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Scheduled sessions</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 hover:border-purple-500/40 rounded-2xl p-5 shadow-lg shadow-black/20 hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between text-purple-400">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">MCQ Quizzes</span>
-              <HelpCircle className="w-5 h-5" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">MCQ Quizzes</span>
+              <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 group-hover:scale-110 transition-transform">
+                <HelpCircle className="w-5 h-5" />
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-purple-400 mt-2">Ready</div>
-            <div className="text-xs text-slate-400 mt-1">Interactive auto-graded tests</div>
+            <div className="text-3xl font-black text-purple-400 mt-3">Ready</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Interactive auto-graded tests</div>
           </div>
         </div>
 
@@ -479,8 +498,8 @@ export default function StudentDashboard() {
 
       {/* Course Detail Modal */}
       {selectedCourse && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full shadow-2xl space-y-4 flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full shadow-2xl space-y-4 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="p-6 border-b border-slate-800 flex items-center justify-between">
               <div>
@@ -490,8 +509,11 @@ export default function StudentDashboard() {
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">{selectedCourse.description}</p>
               </div>
-              <button onClick={() => setSelectedCourse(null)} className="text-slate-400 hover:text-white text-xs">
-                ✕
+              <button
+                onClick={() => setSelectedCourse(null)}
+                className="text-slate-400 hover:text-white p-1 transition"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
