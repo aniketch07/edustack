@@ -23,13 +23,11 @@ import {
   Zap,
   Clock,
 } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { getUser, getToken, getRoleDashboard } from '@/lib/auth';
-
-const DotGrid = dynamic(() => import('@/components/DotGrid'), { ssr: false });
-const SplitText = dynamic(() => import('@/components/SplitText'), { ssr: false });
-const MagicBento = dynamic(() => import('@/components/MagicBento'), { ssr: false });
-const GradientText = dynamic(() => import('@/components/GradientText'), { ssr: false });
+import DotGrid from '@/components/DotGrid';
+import SplitText from '@/components/SplitText';
+import MagicBento from '@/components/MagicBento';
+import GradientText from '@/components/GradientText';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -86,7 +84,7 @@ export default function LandingPage() {
               EduStack
             </span>
             <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              SaaS Platform
+              Online Education Platform
             </span>
           </div>
         </div>
@@ -343,7 +341,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <GraduationCap className="w-4 h-4 text-blue-400" />
-            <span className="font-bold text-slate-300">EduStack SaaS Platform</span>
+            <span className="font-bold text-slate-300">EduStack Online Education Platform</span>
           </div>
           <p>© 2026 EduStack. Built for Indian Coaching Institutes.</p>
           <div className="flex items-center gap-2 text-slate-400">

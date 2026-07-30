@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "EduStack - Online Learning Platform for Coaching Institutes",
-  description: "Multi-tenant SaaS platform for coaching institutes to launch branded online learning academies.",
+  description: "Multi-tenant online education platform for coaching institutes to launch branded online learning academies.",
 };
 
 export default function RootLayout({

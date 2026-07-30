@@ -15,36 +15,42 @@ const cardData = [
     title: 'Strict Multi-Tenant Isolation',
     description: 'Every institute operates in an isolated environment with compound unique constraints (@@unique([instituteId, email])).',
     label: 'Security',
+    image: '/images/landing_webp_images/1st.webp',
   },
   {
     color: '#0f172a',
     title: 'Video Streaming & PDF Notes',
     description: 'Stream MP4 and YouTube video lectures with 90% watched progress tracking and downloadable PDF study materials.',
     label: 'Lectures',
+    image: '/images/landing_webp_images/2nd.webp',
   },
   {
     color: '#0f172a',
     title: 'MCQ Assessment Engine',
     description: 'Create timed multiple-choice tests with answer key stripping security and instant score calculation.',
     label: 'Quizzes',
+    image: '/images/landing_webp_images/3rd.webp',
   },
   {
     color: '#0f172a',
     title: 'Live Classes Scheduler',
     description: 'Schedule live Google Meet and Zoom sessions with date filtering alerts on student dashboards.',
     label: 'Live',
+    image: '/images/landing_webp_images/4th.webp',
   },
   {
     color: '#0f172a',
     title: 'Daily Attendance Marking',
     description: 'Faculty teachers mark daily attendance per course; students view overall attendance percentage reports.',
     label: 'Reports',
+    image: '/images/landing_webp_images/5th.webp',
   },
   {
     color: '#0f172a',
     title: 'Custom Logo & Theme Branding',
     description: 'Personalize institute logo and accent colors across Super Admin, Institute Admin, Teacher, and Student portals.',
     label: 'Branding',
+    image: '/images/landing_webp_images/6th.webp',
   },
 ];
 
@@ -527,6 +533,16 @@ const MagicBento = ({
                 <div className="magic-bento-card__header">
                   <div className="magic-bento-card__label">{card.label}</div>
                 </div>
+                {card.image && (
+                  <div className="my-3 relative w-full h-36 overflow-hidden rounded-xl border border-slate-800/80 shrink-0 z-10">
+                    <img
+                      src={card.image}
+                      alt={card.title}
+                      className="w-full h-full object-cover object-top transition-transform duration-500 hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-40 pointer-events-none" />
+                  </div>
+                )}
                 <div className="magic-bento-card__content">
                   <h2 className="magic-bento-card__title">{card.title}</h2>
                   <p className="magic-bento-card__description">{card.description}</p>
@@ -650,6 +666,16 @@ const MagicBento = ({
               <div className="magic-bento-card__header">
                 <div className="magic-bento-card__label">{card.label}</div>
               </div>
+              {card.image && (
+                <div className="my-3 relative w-full h-36 overflow-hidden rounded-xl border border-slate-800/80 shrink-0 z-10">
+                  <img
+                    src={card.image}
+                    alt={card.title}
+                    className="w-full h-full object-cover object-top transition-transform duration-500 hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-40 pointer-events-none" />
+                </div>
+              )}
               <div className="magic-bento-card__content">
                 <h2 className="magic-bento-card__title">{card.title}</h2>
                 <p className="magic-bento-card__description">{card.description}</p>

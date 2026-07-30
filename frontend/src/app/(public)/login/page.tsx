@@ -21,7 +21,7 @@ import { apiFetch } from '@/lib/api';
 import { setToken, setUser, getRoleDashboard } from '@/lib/auth';
 import { AuthResponse } from '@/types';
 
-const DotGrid = dynamic(() => import('@/components/DotGrid'), { ssr: false });
+import DotGrid from '@/components/DotGrid';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -100,7 +100,7 @@ export default function LoginPage() {
               EduStack
             </span>
             <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              SaaS MVP
+              Online Education Platform
             </span>
           </div>
         </div>
@@ -229,7 +229,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <footer className="w-full max-w-7xl mx-auto py-4 border-t border-slate-800/60 text-center text-xs text-slate-500 z-10">
-        © 2026 EduStack SaaS Platform. Built for Indian Coaching Institutes.
+        © 2026 EduStack Online Education Platform. Built for Indian Coaching Institutes.
       </footer>
     </div>
   );
