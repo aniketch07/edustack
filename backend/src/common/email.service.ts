@@ -45,8 +45,8 @@ export class EmailService {
         },
       );
       this.logger.log(`Welcome email sent to ${params.toEmail}`);
-    } catch (error) {
-      this.logger.error(`Failed to send email to ${params.toEmail}: ${error}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send email to ${params.toEmail}: ${JSON.stringify(error?.message || error)}`);
     }
   }
 }

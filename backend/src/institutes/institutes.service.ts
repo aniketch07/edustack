@@ -309,12 +309,41 @@ export class InstitutesService implements OnModuleInit {
 
   async remove(id: string) {
     try {
+      // Delete in dependency order to avoid FK constraint violations
+      const instituteUsers = await this.prisma.user.findMany({
+        where: { instituteId: id },
+        select: { id: true },
+      });
+      const userIds = instituteUsers.map((u) => u.id);
+
+      const instituteCourses = await this.prisma.course.findMany({
+        where: { instituteId: id },
+        select: { id: true },
+      });
+      const courseIds = instituteCourses.map((c) => c.id);
+
+      // Delete in order: user-level records → course-level records → courses → users → announcements → institute
       await this.prisma.$transaction([
+        // User-level relations
+        this.prisma.testAttempt.deleteMany({ where: { studentId: { in: userIds } } }),
+        this.prisma.enrollment.deleteMany({ where: { studentId: { in: userIds } } }),
+        this.prisma.videoProgress.deleteMany({ where: { studentId: { in: userIds } } }),
+        this.prisma.attendance.deleteMany({ where: { studentId: { in: userIds } } }),
+        // Course-level records (liveClass has cascade from Course, but deleteMany needs direct courseId)
+        this.prisma.liveClass.deleteMany({ where: { courseId: { in: courseIds } } }),
+        // Courses — must go BEFORE users because courses reference teacherId
+        this.prisma.course.deleteMany({ where: { instituteId: id } }),
+        // Now safe to delete users
         this.prisma.user.deleteMany({ where: { instituteId: id } }),
+        // Announcements
+        this.prisma.announcement.deleteMany({ where: { instituteId: id } }),
+        // Finally the institute itself
         this.prisma.institute.delete({ where: { id } }),
       ]);
-    } catch (error) {
-      this.logger.warn(`Database remove failed for institute: ${id}. Falling back to dev store.`);
+
+      this.logger.log(`Institute and all associated data deleted successfully: ${id}`);
+    } catch (error: any) {
+      this.logger.warn(`Database remove failed for institute: ${id} — ${error?.message || error}. Falling back to dev store.`);
     }
 
     const instIdx = MEMORY_INSTITUTES.findIndex((i) => i.id === id);
