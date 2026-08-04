@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Param, Body, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -13,7 +13,7 @@ export class AnnouncementsController {
   constructor(private readonly announcementsService: AnnouncementsService) {}
 
   @Post()
-  @Roles(UserRole.INSTITUTE_ADMIN)
+  @Roles(UserRole.INSTITUTE_ADMIN, UserRole.TEACHER)
   async create(
     @GetUser('instituteId') instituteId: string,
     @Body() createAnnouncementDto: CreateAnnouncementDto,
@@ -25,15 +25,20 @@ export class AnnouncementsController {
   }
 
   @Get()
-  async findAllByInstitute(@GetUser('instituteId') instituteId: string) {
+  async findAllByInstitute(
+    @GetUser('instituteId') instituteId: string,
+    @GetUser('role') role: UserRole,
+    @GetUser('userId') userId: string,
+    @Query('courseId') courseId?: string,
+  ) {
     if (!instituteId) {
       throw new BadRequestException('Institute context missing');
     }
-    return this.announcementsService.findAllByInstitute(instituteId);
+    return this.announcementsService.findAllByInstitute(instituteId, courseId, role, userId);
   }
 
   @Delete(':id')
-  @Roles(UserRole.INSTITUTE_ADMIN)
+  @Roles(UserRole.INSTITUTE_ADMIN, UserRole.TEACHER)
   async remove(
     @GetUser('instituteId') instituteId: string,
     @Param('id') id: string,

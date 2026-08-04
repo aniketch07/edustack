@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Users, Plus, Mail, Lock, User as UserIcon, Phone, CheckCircle2, Search } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Mail, Lock, User as UserIcon, Phone, CheckCircle2, Search, Crown, AlertTriangle } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
-import { User, UserRole } from '@/types';
+import { User, UserRole, Institute } from '@/types';
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -92,18 +92,31 @@ export default function StudentsPage() {
       s.email.toLowerCase().includes(search.toLowerCase()),
   );
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <span className="font-bold text-lg text-white">Student Management</span>
-        </div>
-      </header>
+  // Seat usage from the institute plan
+  const plan = currentUser?.institute as (Partial<Institute> & { planName?: string; studentLimit?: number | null }) | undefined;
+  const planName = plan?.planName || 'Starter';
+  const seatLimit = plan?.studentLimit ?? null; // null = unlimited
+  const activeCount = students.filter((s) => s.isActive !== false).length;
+  const seatFull = seatLimit !== null && activeCount >= seatLimit;
+  const seatPct = seatLimit !== null ? Math.min(100, Math.round((activeCount / seatLimit) * 100)) : 0;
+  const seatsLeft = seatLimit !== null ? Math.max(0, seatLimit - activeCount) : Infinity;
+  const seatBarColor = seatFull
+    ? 'bg-red-500'
+    : seatPct >= 90
+    ? 'bg-orange-500'
+    : seatPct >= 80
+    ? 'bg-amber-400'
+    : 'bg-emerald-500';
+  const seatTextColor = seatFull
+    ? 'text-red-400'
+    : seatPct >= 90
+    ? 'text-orange-400'
+    : seatPct >= 80
+    ? 'text-amber-300'
+    : 'text-emerald-400';
 
-      <main className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+  return (
+    <div className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Institute Students</h1>
@@ -111,12 +124,58 @@ export default function StudentsPage() {
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 text-white rounded-xl text-xs font-semibold transition shadow-md"
+            disabled={seatFull}
+            className={`flex items-center gap-2 px-4 py-2 text-white rounded-xl text-xs font-semibold transition shadow-md ${
+              seatFull
+                ? 'bg-red-600/40 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400'
+            }`}
           >
             <Plus className="w-4 h-4" />
             Add New Student
           </button>
         </div>
+
+        {/* Plan & Student Seats Banner */}
+        <div
+          className={`rounded-2xl p-4 px-5 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+            seatFull
+              ? 'bg-red-500/10 border-red-500/30'
+              : seatPct >= 90
+              ? 'bg-orange-500/10 border-orange-500/30'
+              : seatPct >= 80
+              ? 'bg-amber-500/10 border-amber-500/30'
+              : 'bg-slate-900 border-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Crown className={`w-5 h-5 shrink-0 ${seatFull ? 'text-red-400' : seatPct >= 90 ? 'text-orange-400' : seatPct >= 80 ? 'text-amber-300' : 'text-amber-400'}`} />
+            <div>
+              <p className="text-sm font-bold text-white">
+                {planName} Plan
+              </p>
+              <p className={`text-xs mt-0.5 ${seatTextColor}`}>
+                Student Seats · {activeCount} / {seatLimit === null ? '∞' : seatLimit} Used ·{' '}
+                {seatLimit === null ? 'Unlimited seats' : `${seatsLeft} seat(s) remaining`}
+              </p>
+            </div>
+          </div>
+          {seatLimit !== null && (
+            <div className="w-full sm:w-56">
+              <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                <div className={`${seatBarColor} h-full rounded-full transition-all`} style={{ width: `${Math.max(seatPct, 2)}%` }} />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1 text-right">{seatPct}% used</p>
+            </div>
+          )}
+        </div>
+
+        {seatFull && (
+          <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Student seat limit reached ({activeCount}/{seatLimit}). Contact your platform administrator to upgrade your plan before adding more students.
+          </div>
+        )}
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
           <div className="relative">
@@ -175,7 +234,6 @@ export default function StudentsPage() {
             )}
           </div>
         </div>
-      </main>
 
       {/* Add Student Modal */}
       {showModal && (

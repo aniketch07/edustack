@@ -24,6 +24,7 @@ import {
 import { getUser, removeToken, setUser, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
+import FileUpload from '@/components/FileUpload';
 
 export default function InstituteAdminDashboard() {
   const router = useRouter();
@@ -192,47 +193,7 @@ export default function InstituteAdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
-      {/* Header Bar */}
-      <header className="h-16 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-3">
-          {instLogo ? (
-            <img
-              src={instLogo}
-              alt={currentUser?.institute?.name || 'Institute Logo'}
-              className="w-8 h-8 rounded-lg object-contain bg-slate-950 border border-slate-800 p-0.5"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-xs">
-              {(currentUser?.institute?.name || 'D')[0]}
-            </div>
-          )}
-          <span className="font-bold text-base sm:text-lg text-white tracking-tight">
-            {currentUser?.institute?.name || 'Institute Dashboard'}
-          </span>
-          <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
-            Institute Admin Portal
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs sm:text-sm font-semibold text-white">
-              {currentUser?.firstName} {currentUser?.lastName}
-            </p>
-            <p className="text-[11px] text-slate-400">{currentUser?.email}</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/20 transition-all active:scale-95 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8">
         {/* Page Heading & Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -444,7 +405,6 @@ export default function InstituteAdminDashboard() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Customize Institute Branding Modal */}
       {showBrandingModal && (
@@ -473,27 +433,26 @@ export default function InstituteAdminDashboard() {
             <form onSubmit={handleSaveBranding} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Institute Logo URL (Image URL)
+                  Institute Logo
                 </label>
-                <input
-                  type="text"
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                  placeholder="https://example.com/logo.png or image URL"
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                <FileUpload
+                  folder="institutes"
+                  accept="image/png,image/jpeg,image/webp"
+                  label=""
+                  description="Upload institute logo — max 25 MB (PNG, JPG, WEBP)"
+                  onUploadComplete={(publicUrl) => setLogoUrl(publicUrl)}
                 />
+                {logoUrl && (
+                  <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
+                    <span className="text-xs text-slate-400 font-medium">Logo Preview:</span>
+                    <img
+                      src={logoUrl}
+                      alt="Preview"
+                      className="w-10 h-10 object-contain rounded-lg border border-slate-800 p-1"
+                    />
+                  </div>
+                )}
               </div>
-
-              {logoUrl && (
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
-                  <span className="text-xs text-slate-400 font-medium">Logo Preview:</span>
-                  <img
-                    src={logoUrl}
-                    alt="Preview"
-                    className="w-10 h-10 object-contain rounded-lg border border-slate-800 p-1"
-                  />
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -319,6 +319,7 @@ const ParticleCard = ({
       ref={cardRef}
       className={`${className} particle-container`}
       style={{ ...style, position: 'relative', overflow: 'hidden' }}
+      suppressHydrationWarning
     >
       {children}
     </div>
@@ -458,7 +459,7 @@ const GlobalSpotlight = ({
 };
 
 const BentoCardGrid = ({ children, gridRef }) => (
-  <div className="card-grid bento-section" ref={gridRef}>
+  <div className="card-grid bento-section" ref={gridRef} suppressHydrationWarning>
     {children}
   </div>
 );

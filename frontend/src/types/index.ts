@@ -17,6 +17,10 @@ export interface Institute {
   contactEmail: string;
   contactPhone?: string | null;
   isActive: boolean;
+  planName?: string;
+  studentLimit?: number | null;
+  subscriptionStatus?: string;
+  planUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

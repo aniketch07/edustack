@@ -88,9 +88,20 @@ export default function GradientText({
       className={`animated-gradient-text ${showBorder ? 'with-border' : ''} ${className}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      suppressHydrationWarning
     >
-      {showBorder && <motion.div className="gradient-overlay" style={{ ...gradientStyle, backgroundPosition }} />}
-      <motion.div className="text-content" style={{ ...gradientStyle, backgroundPosition }}>
+      {showBorder && (
+        <motion.div
+          className="gradient-overlay"
+          style={{ ...gradientStyle, backgroundPosition }}
+          suppressHydrationWarning
+        />
+      )}
+      <motion.div
+        className="text-content"
+        style={{ ...gradientStyle, backgroundPosition }}
+        suppressHydrationWarning
+      >
         {children}
       </motion.div>
     </motion.div>

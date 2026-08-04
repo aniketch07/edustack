@@ -93,17 +93,7 @@ export default function TeachersPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <span className="font-bold text-lg text-white">Teacher Management</span>
-        </div>
-      </header>
-
-      <main className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+    <div className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Faculty & Teachers</h1>
@@ -175,7 +165,6 @@ export default function TeachersPage() {
             )}
           </div>
         </div>
-      </main>
 
       {/* Add Teacher Modal */}
       {showModal && (

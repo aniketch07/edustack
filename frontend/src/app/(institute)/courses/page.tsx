@@ -6,10 +6,13 @@ import Link from 'next/link';
 import { BookOpen, Plus, Search, UserCheck, ArrowLeft, LogOut, CheckCircle2, Users, Image as ImageIcon } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
-import { User, Course } from '@/types';
+import { User, Course, UserRole } from '@/types';
+import FileUpload from '@/components/FileUpload';
+import { useToast } from '@/components/Toast';
 
 export default function CourseManagementPage() {
   const router = useRouter();
+  const toast = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
@@ -38,6 +41,8 @@ export default function CourseManagementPage() {
     if (!user || isTokenExpired()) {
       removeToken();
       router.push('/login');
+    } else if (user.role === UserRole.STUDENT) {
+      router.push('/student/dashboard');
     } else {
       setCurrentUser(user);
       fetchData();
@@ -78,18 +83,17 @@ export default function CourseManagementPage() {
         }),
       });
 
-      setSuccessMessage(`Course "${title}" created successfully!`);
-      setTimeout(() => {
-        setShowCreateModal(false);
-        setTitle('');
-        setDescription('');
-        setPrice(0);
-        setThumbnailUrl('');
-        setSelectedTeacherId('');
-        fetchData();
-      }, 1200);
+      setSuccessMessage('');
+      setShowCreateModal(false);
+      setTitle('');
+      setDescription('');
+      setPrice(0);
+      setThumbnailUrl('');
+      setSelectedTeacherId('');
+      fetchData();
+      toast.success(`Course "${title}" created successfully!`);
     } catch (err: any) {
-      alert(err.message || 'Failed to create course.');
+      toast.error(err.message || 'Failed to create course.');
     } finally {
       setSubmitting(false);
     }
@@ -155,49 +159,14 @@ export default function CourseManagementPage() {
 
   const filteredCourses = courses.filter(
     (c) =>
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.description || '').toLowerCase().includes(searchQuery.toLowerCase()),
+      (c?.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c?.description || '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const instLogo = currentUser?.institute?.logoUrl;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          {instLogo ? (
-            <img
-              src={instLogo}
-              alt={currentUser?.institute?.name || 'Institute Logo'}
-              className="w-8 h-8 rounded-lg object-contain bg-slate-950 border border-slate-800 p-0.5"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-xs">
-              {(currentUser?.institute?.name || 'D')[0]}
-            </div>
-          )}
-          <span className="font-bold text-lg text-white">
-            {currentUser?.institute?.name || 'Demo Coaching Academy'}
-          </span>
-          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
-            Course Management
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/20 transition"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <div className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+    <div className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Institute Courses</h1>
@@ -236,7 +205,11 @@ export default function CourseManagementPage() {
             {filteredCourses.map((course: any) => {
               const thumb = course.thumbnailUrl || course.thumbnail;
               return (
-                <div key={course.id} className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition group">
+                <div
+                  key={course.id}
+                  onClick={() => router.push(`/courses/${course.id}`)}
+                  className="bg-slate-900 border border-slate-800 hover:border-blue-500/50 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition group cursor-pointer"
+                >
                   {/* Course Thumbnail Image Header */}
                   {thumb ? (
                     <div className="h-36 w-full overflow-hidden bg-slate-950 relative">
@@ -257,7 +230,7 @@ export default function CourseManagementPage() {
                         {course.isPublished ? 'PUBLISHED' : 'DRAFT'}
                       </span>
                       <span className="text-sm font-mono font-bold text-white">
-                        {course.price === 0 ? 'FREE' : `₹${course.price.toLocaleString('en-IN')}`}
+                        {(course.price ?? 0) === 0 ? 'FREE' : `₹${(course.price ?? 0).toLocaleString('en-IN')}`}
                       </span>
                     </div>
 
@@ -267,7 +240,10 @@ export default function CourseManagementPage() {
                     </div>
                   </div>
 
-                  <div className="p-6 border-t border-slate-800 bg-slate-950/40 space-y-3">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-6 border-t border-slate-800 bg-slate-950/40 space-y-3"
+                  >
                     {/* Inline Teacher Assignment Selector */}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -289,8 +265,11 @@ export default function CourseManagementPage() {
                     </div>
 
                     <button
-                      onClick={() => handleOpenAllocationModal(course)}
-                      className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-semibold transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenAllocationModal(course);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-semibold transition cursor-pointer"
                     >
                       <Users className="w-3.5 h-3.5" />
                       Set Allocated Students ({course._count?.enrollments || 0})
@@ -301,7 +280,6 @@ export default function CourseManagementPage() {
             })}
           </div>
         )}
-      </div>
 
       {/* Create Course Modal */}
       {showCreateModal && (
@@ -381,22 +359,21 @@ export default function CourseManagementPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Course Thumbnail Image URL</label>
-                <input
-                  type="text"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  placeholder="https://example.com/course-banner.jpg or image URL"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Course Thumbnail</label>
+                <FileUpload
+                  folder="courses"
+                  accept="image/png,image/jpeg,image/webp"
+                  label=""
+                  description="Upload course thumbnail image — max 25 MB (PNG, JPG, WEBP)"
+                  onUploadComplete={(publicUrl) => setThumbnailUrl(publicUrl)}
                 />
+                {thumbnailUrl && (
+                  <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
+                    <span className="text-xs text-slate-400 font-medium">Banner Preview:</span>
+                    <img src={thumbnailUrl} alt="Thumbnail Preview" className="w-16 h-10 object-cover rounded-lg border border-slate-800" />
+                  </div>
+                )}
               </div>
-
-              {thumbnailUrl && (
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
-                  <span className="text-xs text-slate-400 font-medium">Banner Preview:</span>
-                  <img src={thumbnailUrl} alt="Thumbnail Preview" className="w-16 h-10 object-cover rounded-lg border border-slate-800" />
-                </div>
-              )}
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
@@ -428,7 +405,7 @@ export default function CourseManagementPage() {
                 <Users className="w-5 h-5" />
                 <div>
                   <h3 className="text-base font-bold text-white">Allocate Students to Course</h3>
-                  <p className="text-xs text-slate-400">{selectedCourseForAllocation.title}</p>
+                  <p className="text-xs text-slate-400">{selectedCourseForAllocation?.title}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedCourseForAllocation(null)} className="text-slate-400 hover:text-white text-xs">

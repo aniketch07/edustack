@@ -33,7 +33,7 @@ export class AnnouncementsService implements OnModuleInit {
   }
 
   async create(instituteId: string, createAnnouncementDto: CreateAnnouncementDto) {
-    const { isPublished } = createAnnouncementDto;
+    const { isPublished, courseId } = createAnnouncementDto;
     const title = sanitizeText(createAnnouncementDto.title);
     const content = sanitizeText(createAnnouncementDto.content);
 
@@ -41,9 +41,15 @@ export class AnnouncementsService implements OnModuleInit {
       const announcement = await this.prisma.announcement.create({
         data: {
           instituteId,
+          courseId: courseId || null,
           title,
           content,
           isPublished: isPublished ?? true,
+        },
+        include: {
+          course: {
+            select: { id: true, title: true },
+          },
         },
       });
 
@@ -55,9 +61,16 @@ export class AnnouncementsService implements OnModuleInit {
       this.logger.warn(`Database announcement create failed. Using dev store for: ${title}`);
     }
 
+    let courseObj: any = null;
+    if (courseId) {
+      courseObj = MEMORY_COURSES.find((c) => c.id === courseId) || null;
+    }
+
     const newAnnouncement = {
       id: `ann-${Date.now()}`,
       instituteId,
+      courseId: courseId || null,
+      course: courseObj ? { id: courseObj.id, title: courseObj.title } : null,
       title,
       content,
       isPublished: isPublished ?? true,
@@ -74,19 +87,60 @@ export class AnnouncementsService implements OnModuleInit {
     };
   }
 
-  async findAllByInstitute(instituteId: string) {
+  async findAllByInstitute(
+    instituteId: string,
+    courseId?: string,
+    userRole?: string,
+    userId?: string,
+  ) {
     try {
+      let whereClause: any = { instituteId };
+
+      if (courseId) {
+        whereClause.courseId = courseId;
+      } else if (userRole === 'STUDENT' && userId) {
+        // Enrolled courses for this student + global announcements (courseId === null)
+        const enrollments = await this.prisma.enrollment.findMany({
+          where: { studentId: userId },
+          select: { courseId: true },
+        });
+        const enrolledCourseIds = enrollments.map((e) => e.courseId);
+        whereClause.OR = [{ courseId: null }, { courseId: { in: enrolledCourseIds } }];
+      } else if (userRole === 'TEACHER' && userId) {
+        // Assigned courses for this teacher + global announcements (courseId === null)
+        const teacherCourses = await this.prisma.course.findMany({
+          where: { teacherId: userId },
+          select: { id: true },
+        });
+        const assignedCourseIds = teacherCourses.map((c) => c.id);
+        whereClause.OR = [{ courseId: null }, { courseId: { in: assignedCourseIds } }];
+      }
+
       const announcements = await this.prisma.announcement.findMany({
-        where: { instituteId },
+        where: whereClause,
+        include: {
+          course: {
+            select: { id: true, title: true },
+          },
+        },
         orderBy: { createdAt: 'desc' },
       });
 
-      const memoryMatches = MEMORY_ANNOUNCEMENTS.filter((a) => a.instituteId === instituteId);
+      const memoryMatches = MEMORY_ANNOUNCEMENTS.filter((a) => {
+        if (a.instituteId !== instituteId) return false;
+        if (courseId) return a.courseId === courseId;
+        return true;
+      });
+
       const dbIds = new Set(announcements.map((r) => r.id));
       const uniqueMemory = memoryMatches.filter((m) => !dbIds.has(m.id));
       return [...announcements, ...uniqueMemory];
     } catch (error) {
-      return MEMORY_ANNOUNCEMENTS.filter((a) => a.instituteId === instituteId);
+      return MEMORY_ANNOUNCEMENTS.filter((a) => {
+        if (a.instituteId !== instituteId) return false;
+        if (courseId) return a.courseId === courseId;
+        return true;
+      });
     }
   }
 

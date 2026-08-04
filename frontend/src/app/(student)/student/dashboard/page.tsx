@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Video, FileText, Calendar, LogOut, Search, UserCheck, Play, Download, CheckCircle2, XCircle, Award, HelpCircle, Clock, CheckSquare, Megaphone, ExternalLink, Check, Image as ImageIcon, X, Loader2 } from 'lucide-react';
-import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
+import { getUser, removeToken, isTokenExpired, getToken } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
 
@@ -27,12 +27,6 @@ export default function StudentDashboard() {
   const [liveClasses, setLiveClasses] = useState<any[]>([]);
   const [loadingModalData, setLoadingModalData] = useState(false);
   const [activeLesson, setActiveLesson] = useState<any | null>(null);
-
-  // Test Taking Engine Modal State
-  const [activeTest, setActiveTest] = useState<any | null>(null);
-  const [userAnswers, setUserAnswers] = useState<{ [questionId: string]: number }>({});
-  const [submittingTest, setSubmittingTest] = useState(false);
-  const [testResult, setTestResult] = useState<any | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastSavedTimeRef = useRef<number>(0);
@@ -179,44 +173,32 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleStartTest = (test: any) => {
-    setActiveTest(test);
-    setUserAnswers({});
-    setTestResult(null);
-  };
-
-  const handleSelectOption = (questionId: string, optionIndex: number) => {
-    setUserAnswers((prev) => ({
-      ...prev,
-      [questionId]: optionIndex,
-    }));
-  };
-
-  const handleSubmitTest = async () => {
-    if (!activeTest) return;
-    setSubmittingTest(true);
-
-    try {
-      const res = await apiFetch<any>(`/tests/${activeTest.id}/submit`, {
-        method: 'POST',
-        body: JSON.stringify({ answers: userAnswers }),
-      });
-
-      setTestResult(res.attempt || res);
-      if (selectedCourse) {
-        const updatedTests = await apiFetch<any[]>(`/courses/${selectedCourse.id}/tests`);
-        setCourseTests(updatedTests);
-      }
-    } catch (err: any) {
-      alert(err.message || 'Failed to submit test.');
-    } finally {
-      setSubmittingTest(false);
-    }
-  };
-
   const handleLogout = () => {
     removeToken();
     router.push('/login');
+  };
+
+  const handleDownloadPdf = async (lessonId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      const token = getToken();
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+      const res = await fetch(`${baseUrl}/lessons/${lessonId}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'notes.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download PDF.');
+    }
   };
 
   const getYouTubeEmbedUrl = (url: string) => {
@@ -346,9 +328,20 @@ export default function StudentDashboard() {
               Academy Announcements Broadcast
             </div>
             {announcements.slice(0, 3).map((a) => (
-              <div key={a.id} className="text-xs text-slate-300">
-                <span className="font-bold text-white">{a.title}: </span>
-                <span>{a.content}</span>
+              <div key={a.id} className="text-xs text-slate-300 flex items-start gap-2">
+                {a.course ? (
+                  <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold shrink-0">
+                    {a.course.title}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
+                    Institute Wide
+                  </span>
+                )}
+                <div>
+                  <span className="font-bold text-white">{a.title}: </span>
+                  <span>{a.content}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -435,7 +428,11 @@ export default function StudentDashboard() {
                 const thumb = course.thumbnailUrl || course.thumbnail;
 
                 return (
-                  <div key={course.id} className="bg-slate-950 border border-slate-800 hover:border-blue-500/50 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition group">
+                  <div
+                    key={course.id}
+                    onClick={() => router.push(`/courses/${course.id}`)}
+                    className="bg-slate-950 border border-slate-800 hover:border-blue-500/50 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition group cursor-pointer"
+                  >
                     {/* Course Thumbnail Image Header */}
                     {thumb ? (
                       <div className="h-36 w-full overflow-hidden bg-slate-900 relative">
@@ -450,7 +447,7 @@ export default function StudentDashboard() {
                           ENROLLED
                         </span>
                         <span className="text-xs font-mono font-bold text-slate-300">
-                          {course.price === 0 ? 'FREE' : `₹${course.price.toLocaleString('en-IN')}`}
+                          {(course.price ?? 0) === 0 ? 'FREE' : `₹${(course.price ?? 0).toLocaleString('en-IN')}`}
                         </span>
                       </div>
 
@@ -481,11 +478,14 @@ export default function StudentDashboard() {
                       </div>
 
                       <button
-                        onClick={() => handleOpenCourseModal(course)}
-                        className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 text-white text-xs font-bold transition shadow-md shadow-blue-600/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/courses/${course.id}`);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 text-white text-xs font-bold transition shadow-md shadow-blue-600/20 cursor-pointer"
                       >
                         <Play className="w-4 h-4 fill-white" />
-                        View Materials, Live & Tests
+                        View Full Course Workspace
                       </button>
                     </div>
                   </div>
@@ -590,6 +590,9 @@ export default function StudentDashboard() {
                             ref={videoRef}
                             src={activeLesson.videoUrl}
                             controls
+                            controlsList="nodownload noremoteplayback noplaybackrate"
+                            disablePictureInPicture
+                            onContextMenu={(e) => e.preventDefault()}
                             onTimeUpdate={handleTimeUpdate}
                             className="w-full h-full"
                           />
@@ -656,15 +659,14 @@ export default function StudentDashboard() {
                               )}
 
                               {lesson.pdfUrl && (
-                                <a
-                                  href={lesson.pdfUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700"
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDownloadPdf(lesson.id, e)}
+                                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700 cursor-pointer"
                                 >
                                   <Download className="w-3.5 h-3.5" />
                                   PDF Notes
-                                </a>
+                                </button>
                               )}
                             </div>
                           </div>
@@ -759,7 +761,7 @@ export default function StudentDashboard() {
                           </div>
 
                           <button
-                            onClick={() => handleStartTest(test)}
+                            onClick={() => router.push(`/student/tests/${test.id}`)}
                             className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0"
                           >
                             <Clock className="w-3.5 h-3.5" />
@@ -854,122 +856,6 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      {/* Interactive Test Engine Modal */}
-      {activeTest && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-white">{activeTest.title}</h3>
-                <p className="text-xs text-slate-400">Duration: {activeTest.duration || 30} Mins | Total Marks: {activeTest.totalMarks}</p>
-              </div>
-              <button onClick={() => setActiveTest(null)} className="text-slate-400 hover:text-white text-xs">
-                ✕
-              </button>
-            </div>
-
-            {testResult ? (
-              /* Auto-Graded Scorecard */
-              <div className="space-y-6 text-center py-4">
-                <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-purple-500/10 border border-purple-500/20">
-                  {testResult.passed ? (
-                    <Award className="w-8 h-8 text-emerald-400" />
-                  ) : (
-                    <XCircle className="w-8 h-8 text-red-400" />
-                  )}
-                </div>
-
-                <div>
-                  <h4 className="text-2xl font-extrabold text-white">
-                    {testResult.passed ? 'Test Passed! 🎉' : 'Test Failed'}
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Your Score: <span className="text-lg font-bold text-purple-400">{testResult.score} / {testResult.totalMarks}</span>
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 max-w-sm mx-auto flex justify-around text-xs">
-                  <div>
-                    <span className="text-slate-400 font-medium">Status</span>
-                    <p className={`font-bold mt-0.5 ${testResult.passed ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {testResult.passed ? 'PASSED' : 'FAILED'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">Percentage</span>
-                    <p className="font-bold text-white mt-0.5">
-                      {Math.round((testResult.score / (testResult.totalMarks || 1)) * 100)}%
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setActiveTest(null)}
-                  className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition shadow-md"
-                >
-                  Return to Course Portal
-                </button>
-              </div>
-            ) : (
-              /* Questions Checklist */
-              <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-                {activeTest.questions?.map((q: any, qIdx: number) => (
-                  <div key={q.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-purple-400">Question {qIdx + 1}</span>
-                      <span className="text-slate-500">{q.marks || 5} Marks</span>
-                    </div>
-
-                    <p className="text-xs font-semibold text-white">{q.question}</p>
-
-                    <div className="space-y-2">
-                      {q.options?.map((opt: string, optIdx: number) => (
-                        <label
-                          key={optIdx}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
-                            userAnswers[q.id] === optIdx
-                              ? 'bg-purple-500/10 border-purple-500/40 text-purple-200'
-                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/60'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`q-${q.id}`}
-                            checked={userAnswers[q.id] === optIdx}
-                            onChange={() => handleSelectOption(q.id, optIdx)}
-                            className="w-4 h-4 text-purple-600 focus:ring-purple-500 bg-slate-950"
-                          />
-                          <span className="text-xs font-medium">{opt}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!testResult && (
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveTest(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitTest}
-                  disabled={submittingTest}
-                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-emerald-500 hover:from-purple-500 hover:to-emerald-400 text-white text-xs font-bold transition disabled:opacity-50 shadow-md"
-                >
-                  {submittingTest ? 'Grading Test...' : 'Submit & Grade Test'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

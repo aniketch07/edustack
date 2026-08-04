@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Users, Video, FileText, HelpCircle, LogOut, Search, UserCheck, CheckCircle2, Plus, Calendar, FilePlus, Trash2, Clock, Award, Megaphone, ExternalLink, Image as ImageIcon, Loader2, X } from 'lucide-react';
+import { BookOpen, Users, Video, FileText, HelpCircle, LogOut, Search, UserCheck, CheckCircle2, Plus, Calendar, FilePlus, Trash2, Clock, Award, Megaphone, ExternalLink, Image as ImageIcon, Loader2, X, Sparkles } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
+import FileUpload from '@/components/FileUpload';
+import { useToast } from '@/components/Toast';
 
 interface QuestionForm {
   question: string;
@@ -16,9 +18,17 @@ interface QuestionForm {
 
 export default function TeacherDashboard() {
   const router = useRouter();
+  const toast = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [assignedCourses, setAssignedCourses] = useState<Course[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
+
+  // Post Announcement State for Teachers
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementContent, setAnnouncementContent] = useState('');
+  const [selectedCourseForAnnouncement, setSelectedCourseForAnnouncement] = useState('');
+  const [submittingAnnouncement, setSubmittingAnnouncement] = useState(false);
   const [scheduledLiveClasses, setScheduledLiveClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +59,16 @@ export default function TeacherDashboard() {
   const [testTitle, setTestTitle] = useState('');
   const [testDescription, setTestDescription] = useState('');
   const [duration, setDuration] = useState<number>(30);
-  const [passingMarks, setPassingMarks] = useState<number>(10);
+  const [testTotalMarks, setTestTotalMarks] = useState<number>(10);
+  const [passingMarks, setPassingMarks] = useState<number>(5);
+
+  // AI Question Generation State
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiTopics, setAiTopics] = useState('');
+  const [aiCount, setAiCount] = useState(10);
+  const [aiDifficulty, setAiDifficulty] = useState('mix');
+  const [generating, setGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<QuestionForm[]>([
     {
       question: '',
@@ -264,11 +283,29 @@ export default function TeacherDashboard() {
     }
   };
 
+  // Distribute total marks evenly across all questions, always summing exactly to total
+  const distributeMarks = (total: number, count: number): number[] => {
+    if (count <= 0) return [];
+    const base = Math.floor(total / count);
+    const remainder = total % count;
+    return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+  };
+
+  const reapplyMarks = (qs: QuestionForm[], total: number): QuestionForm[] => {
+    const marks = distributeMarks(total, qs.length);
+    return qs.map((q, i) => ({ ...q, marks: marks[i] }));
+  };
+
   const addQuestionForm = () => {
-    setQuestions((prev) => [
-      ...prev,
-      { question: '', options: ['', '', '', ''], correctAnswer: 0, marks: 5 },
-    ]);
+    setQuestions((prev) =>
+      reapplyMarks([...prev, { question: '', options: ['', '', '', ''], correctAnswer: 0, marks: 1 }], testTotalMarks),
+    );
+  };
+
+  const handleTotalMarksChange = (value: number) => {
+    const v = Number(value) || 1;
+    setTestTotalMarks(v);
+    setQuestions((prev) => reapplyMarks(prev, v));
   };
 
   const updateQuestionText = (index: number, text: string) => {
@@ -299,7 +336,7 @@ export default function TeacherDashboard() {
 
   const removeQuestion = (qIndex: number) => {
     if (questions.length === 1) return;
-    setQuestions((prev) => prev.filter((_, i) => i !== qIndex));
+    setQuestions((prev) => reapplyMarks(prev.filter((_, i) => i !== qIndex), testTotalMarks));
   };
 
   const handleCreateTest = async (e: React.FormEvent) => {
@@ -308,7 +345,23 @@ export default function TeacherDashboard() {
     setSubmittingTest(true);
     setTestSuccess(null);
 
-    const calculatedTotalMarks = questions.reduce((acc, q) => acc + (Number(q.marks) || 1), 0);
+    // Skip empty/unfilled question rows (no text or no valid options)
+    const finalQuestions = reapplyMarks(questions, testTotalMarks).filter((q) => {
+      const hasText = q.question.trim().length > 0;
+      const validOptions = q.options.filter((o) => o.trim().length > 0).length;
+      return hasText && validOptions >= 2;
+    });
+    if (finalQuestions.length === 0) {
+      setTestSuccess(null);
+      alert('Add at least one question with a question and at least 2 options.');
+      setSubmittingTest(false);
+      return;
+    }
+    const totalForSend = finalQuestions.reduce((acc, q) => acc + (Number(q.marks) || 1), 0);
+
+    // Clamp passing marks so it can never exceed the total achievable marks
+    const requestedPassing = Number(passingMarks) || Math.round(totalForSend * 0.5);
+    const safePassingMarks = Math.min(Math.max(requestedPassing, 1), totalForSend);
 
     try {
       await apiFetch(`/courses/${selectedCourseForTest.id}/tests`, {
@@ -317,13 +370,13 @@ export default function TeacherDashboard() {
           title: testTitle,
           description: testDescription || undefined,
           duration: Number(duration) || 30,
-          totalMarks: calculatedTotalMarks,
-          passingMarks: Number(passingMarks) || Math.round(calculatedTotalMarks * 0.5),
-          questions: questions.map((q) => ({
+          totalMarks: totalForSend,
+          passingMarks: safePassingMarks,
+          questions: finalQuestions.map((q) => ({
             question: q.question,
             options: q.options.filter((o) => o.trim().length > 0),
             correctAnswer: Number(q.correctAnswer),
-            marks: Number(q.marks) || 5,
+            marks: Number(q.marks) || 1,
           })),
         }),
       });
@@ -340,6 +393,80 @@ export default function TeacherDashboard() {
     } finally {
       setSubmittingTest(false);
     }
+  };
+
+  const handleOpenLessonModal = (course: Course) => {
+    setLessonSuccess(null);
+    setSelectedCourseForLesson(course);
+  };
+
+  const handleOpenTestModal = (course: Course) => {
+    setTestSuccess(null);
+    setTestTitle('');
+    setTestDescription('');
+    setTestTotalMarks(10);
+    setPassingMarks(5);
+    setQuestions([{ question: '', options: ['', '', '', ''], correctAnswer: 0, marks: 10 }]);
+    setShowAiPanel(false);
+    setAiTopics('');
+    setAiCount(10);
+    setAiDifficulty('mix');
+    setAiError(null);
+    setSelectedCourseForTest(course);
+  };
+
+  const handleAiGenerate = async () => {
+    if (!aiTopics.trim()) {
+      setAiError('Please enter topics for the AI to generate questions on.');
+      return;
+    }
+    setGenerating(true);
+    setAiError(null);
+    try {
+      const res = await apiFetch<{ questions: Array<{ question: string; options: string[]; correctAnswer: number; explanation?: string }> }>(
+        '/ai/generate-mcq',
+        {
+          method: 'POST',
+          body: JSON.stringify({ topics: aiTopics, count: aiCount, difficulty: aiDifficulty }),
+        },
+      );
+      const gen = res.questions || [];
+      if (gen.length === 0) {
+        setAiError('AI returned no questions. Try again.');
+        return;
+      }
+      // Append generated questions, replacing the untouched empty placeholder
+      // question so we don't end up with a blank row at the top.
+      setQuestions((prev) => {
+        const firstIsPlaceholder =
+          prev.length > 0 &&
+          !prev[0].question.trim() &&
+          prev[0].options.every((o) => !o.trim());
+        const base = firstIsPlaceholder ? prev.slice(1) : prev;
+        return [
+          ...base,
+          ...gen.map((q) => ({
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            marks: 1,
+          })),
+        ];
+      });
+      setShowAiPanel(false);
+    } catch (err: any) {
+      // AI unavailable — fall back to manual editing instead of blocking the teacher
+      setShowAiPanel(false);
+      setAiError(null);
+      toast.info('AI generation is temporarily unavailable. Add your questions manually below.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleOpenLiveClassModal = (course: Course) => {
+    setLiveClassSuccess(null);
+    setSelectedCourseForLiveClass(course);
   };
 
   const handleLogout = () => {
@@ -359,6 +486,32 @@ export default function TeacherDashboard() {
     (acc, c) => acc + (c._count?.enrollments || 0),
     0,
   );
+
+  const handlePostTeacherAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!announcementTitle || !announcementContent || !selectedCourseForAnnouncement) return;
+    setSubmittingAnnouncement(true);
+    try {
+      await apiFetch('/announcements', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: announcementTitle,
+          content: announcementContent,
+          courseId: selectedCourseForAnnouncement,
+        }),
+      });
+      const updatedAnn = await apiFetch<any[]>('/announcements');
+      setAnnouncements(updatedAnn);
+      setShowAnnouncementModal(false);
+      setAnnouncementTitle('');
+      setAnnouncementContent('');
+      setSelectedCourseForAnnouncement('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to post announcement.');
+    } finally {
+      setSubmittingAnnouncement(false);
+    }
+  };
 
   const instLogo = currentUser?.institute?.logoUrl;
 
@@ -478,20 +631,48 @@ export default function TeacherDashboard() {
         </div>
 
         {/* Announcements Banner */}
-        {announcements.length > 0 && (
-          <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-2">
+        <div className="p-5 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
               <Megaphone className="w-4 h-4" />
-              Institute Announcements Feed
+              Announcements Feed
             </div>
-            {announcements.slice(0, 2).map((a) => (
-              <div key={a.id} className="text-xs text-slate-300">
-                <span className="font-bold text-white">{a.title}: </span>
-                <span>{a.content}</span>
-              </div>
-            ))}
+
+            {assignedCourses.length > 0 && (
+              <button
+                onClick={() => setShowAnnouncementModal(true)}
+                className="px-3 py-1 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-500/20"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Post Course Announcement
+              </button>
+            )}
           </div>
-        )}
+
+          {announcements.length === 0 ? (
+            <p className="text-xs text-slate-400">No announcements published yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {announcements.slice(0, 3).map((a) => (
+                <div key={a.id} className="text-xs text-slate-300 flex items-start gap-2">
+                  {a.course ? (
+                    <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold shrink-0">
+                      {a.course.title}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
+                      Institute Wide
+                    </span>
+                  )}
+                  <div>
+                    <span className="font-bold text-white">{a.title}: </span>
+                    <span>{a.content}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Scheduled Live Classes Section */}
         {scheduledLiveClasses.length > 0 && (
@@ -576,7 +757,11 @@ export default function TeacherDashboard() {
               {assignedCourses.map((course: any) => {
                 const thumb = course.thumbnailUrl || course.thumbnail;
                 return (
-                  <div key={course.id} className="bg-slate-950 border border-slate-800 hover:border-teal-500/50 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition group">
+                  <div
+                    key={course.id}
+                    onClick={() => router.push(`/courses/${course.id}`)}
+                    className="bg-slate-950 border border-slate-800 hover:border-teal-500/50 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition group cursor-pointer"
+                  >
                     {/* Course Thumbnail Image Header */}
                     {thumb ? (
                       <div className="h-36 w-full overflow-hidden bg-slate-900 relative">
@@ -597,7 +782,7 @@ export default function TeacherDashboard() {
                           {course.isPublished ? 'PUBLISHED' : 'DRAFT'}
                         </span>
                         <span className="text-xs font-mono font-bold text-slate-300">
-                          {course.price === 0 ? 'FREE' : `₹${course.price.toLocaleString('en-IN')}`}
+                          {(course.price ?? 0) === 0 ? 'FREE' : `₹${(course.price ?? 0).toLocaleString('en-IN')}`}
                         </span>
                       </div>
 
@@ -605,7 +790,10 @@ export default function TeacherDashboard() {
                       <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{course.description}</p>
                     </div>
 
-                    <div className="p-5 border-t border-slate-800/80 bg-slate-900/40 space-y-3">
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-5 border-t border-slate-800/80 bg-slate-900/40 space-y-3"
+                    >
                       <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
                         <span>{course._count?.lessons || 0} Lesson(s)</span>
                         <span className="text-teal-400 font-bold">{course._count?.enrollments || 0} Enrolled</span>
@@ -613,16 +801,22 @@ export default function TeacherDashboard() {
 
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => setSelectedCourseForLiveClass(course)}
-                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-[11px] font-semibold transition"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenLiveClassModal(course);
+                          }}
+                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-[11px] font-semibold transition cursor-pointer"
                         >
                           <Video className="w-3.5 h-3.5 text-emerald-400" />
                           Schedule Live
                         </button>
 
                         <button
-                          onClick={() => handleOpenAttendance(course)}
-                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[11px] font-semibold transition"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAttendance(course);
+                          }}
+                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[11px] font-semibold transition cursor-pointer"
                         >
                           <Calendar className="w-3.5 h-3.5 text-amber-400" />
                           Attendance
@@ -631,16 +825,22 @@ export default function TeacherDashboard() {
 
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => setSelectedCourseForLesson(course)}
-                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20 text-[11px] font-semibold transition"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenLessonModal(course);
+                          }}
+                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20 text-[11px] font-semibold transition cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5 text-blue-400" />
                           Add Lesson
                         </button>
 
                         <button
-                          onClick={() => setSelectedCourseForTest(course)}
-                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[11px] font-semibold transition"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/teacher/courses/${course.id}/tests`);
+                          }}
+                          className="flex items-center justify-center gap-1 p-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[11px] font-semibold transition cursor-pointer"
                         >
                           <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
                           Create Test
@@ -648,8 +848,11 @@ export default function TeacherDashboard() {
                       </div>
 
                       <button
-                        onClick={() => handleOpenRoster(course)}
-                        className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenRoster(course);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
                       >
                         <Users className="w-3.5 h-3.5 text-teal-400" />
                         View Student Roster ({course._count?.enrollments || 0})
@@ -666,7 +869,7 @@ export default function TeacherDashboard() {
       {/* Schedule Live Class Modal */}
       {selectedCourseForLiveClass && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2 text-emerald-400">
                 <Video className="w-5 h-5" />
@@ -793,8 +996,8 @@ export default function TeacherDashboard() {
             )}
 
             <form onSubmit={handleCreateTest} className="flex-1 overflow-y-auto space-y-6 pr-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="sm:col-span-4">
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Test Title *</label>
                   <input
                     type="text"
@@ -806,8 +1009,130 @@ export default function TeacherDashboard() {
                   />
                 </div>
 
+                {/* Two-Path Question Entry: Generate with AI OR Add Manually */}
+                <div className="sm:col-span-4">
+                  <label className="block text-xs font-semibold text-slate-300 mb-2">
+                    How do you want to add questions?
+                  </label>
+                  {!showAiPanel ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowAiPanel(true)}
+                        className="p-3.5 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-left transition cursor-pointer"
+                      >
+                        <span className="text-sm font-bold text-purple-300">✨ Generate with AI</span>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Enter topics &amp; count — AI writes the questions for you.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAiPanel(false)}
+                        className="p-3.5 rounded-2xl border border-slate-800 bg-slate-950 hover:border-slate-700 text-left transition cursor-pointer"
+                      >
+                        <span className="text-sm font-bold text-white">✍️ Add Manually</span>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Write each question yourself below.
+                        </p>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-300">✨ AI Question Generator</span>
+                        <button
+                          type="button"
+                          onClick={() => { setShowAiPanel(false); setAiError(null); }}
+                          className="text-[11px] text-slate-400 hover:text-white transition"
+                        >
+                          ✕ Back to manual
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Topics (comma-separated) *</label>
+                        <input
+                          type="text"
+                          value={aiTopics}
+                          onChange={(e) => setAiTopics(e.target.value)}
+                          placeholder="e.g., Newton Laws of Motion, Kinematics, Friction"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Number of Questions</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={aiCount}
+                            onChange={(e) => setAiCount(Number(e.target.value))}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Difficulty</label>
+                          <select
+                            value={aiDifficulty}
+                            onChange={(e) => setAiDifficulty(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                          >
+                            <option value="mix">Mixed</option>
+                            <option value="easy">Easy</option>
+                            <option value="medium">Medium</option>
+                            <option value="hard">Hard</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {aiError && (
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
+                          {aiError}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleAiGenerate}
+                        disabled={generating}
+                        className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 disabled:opacity-60 cursor-pointer"
+                      >
+                        {generating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Generating {aiCount} questions...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Generate Questions
+                          </>
+                        )}
+                      </button>
+                      <p className="text-[10px] text-slate-500">
+                        AI questions are added below for your review — edit or remove before publishing.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Time Limit (Minutes) *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Total Marks *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={testTotalMarks}
+                    onChange={(e) => handleTotalMarksChange(Number(e.target.value))}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Time Limit (Min) *</label>
                   <input
                     type="number"
                     min={1}
@@ -823,11 +1148,22 @@ export default function TeacherDashboard() {
                   <input
                     type="number"
                     min={1}
+                    max={testTotalMarks}
                     value={passingMarks}
                     onChange={(e) => setPassingMarks(Number(e.target.value))}
                     required
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
                   />
+                </div>
+
+                <div className="sm:col-span-4">
+                  <p className="text-[11px] text-slate-400">
+                    💡 Marks are <span className="text-purple-400 font-semibold">auto-distributed evenly</span> across questions.
+                    Currently <span className="text-white font-semibold">{questions.length} question(s)</span> →{' '}
+                    <span className="text-white font-semibold">
+                      {distributeMarks(testTotalMarks, questions.length).join(' / ')} marks each
+                    </span>.
+                  </p>
                 </div>
               </div>
 
@@ -848,7 +1184,12 @@ export default function TeacherDashboard() {
                 {questions.map((q, qIdx) => (
                   <div key={qIdx} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 relative">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white">Question {qIdx + 1}</span>
+                      <span className="text-xs font-bold text-white flex items-center gap-2">
+                        Question {qIdx + 1}
+                        <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold">
+                          {q.marks} Marks
+                        </span>
+                      </span>
                       {questions.length > 1 && (
                         <button
                           type="button"
@@ -956,7 +1297,7 @@ export default function TeacherDashboard() {
                 enrolledStudents.map((item: any) => {
                   const student = item.student || item;
                   const sId = student.id || item.studentId;
-                  const isPresent = attendanceRecords[sId] ?? true;
+                  const isPresent = attendanceRecords[sId] ?? false;
 
                   return (
                     <div
@@ -1008,7 +1349,7 @@ export default function TeacherDashboard() {
       {/* Add Lesson Modal */}
       {selectedCourseForLesson && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2 text-blue-400">
                 <FilePlus className="w-5 h-5" />
@@ -1054,25 +1395,35 @@ export default function TeacherDashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Video Lecture Link (MP4 / YouTube URL)</label>
-                <input
-                  type="text"
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=... or MP4 URL"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Video Lecture</label>
+                <FileUpload
+                  folder="lessons"
+                  accept="video/mp4,video/webm"
+                  label=""
+                  description="Upload MP4 / WebM video — max 500 MB"
+                  onUploadComplete={(publicUrl) => setVideoUrl(publicUrl)}
                 />
+                {videoUrl && (
+                  <p className="mt-1.5 text-[11px] text-emerald-400 font-medium">
+                    ✓ Video uploaded successfully
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">PDF Study Notes Link</label>
-                <input
-                  type="text"
-                  value={pdfUrl}
-                  onChange={(e) => setPdfUrl(e.target.value)}
-                  placeholder="https://example.com/notes.pdf"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                <label className="block text-xs font-semibold text-slate-300 mb-1">PDF Study Notes</label>
+                <FileUpload
+                  folder="lessons"
+                  accept="application/pdf"
+                  label=""
+                  description="Upload PDF notes — max 50 MB"
+                  onUploadComplete={(publicUrl) => setPdfUrl(publicUrl)}
                 />
+                {pdfUrl && (
+                  <p className="mt-1.5 text-[11px] text-emerald-400 font-medium">
+                    ✓ PDF uploaded successfully
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
@@ -1162,6 +1513,71 @@ export default function TeacherDashboard() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post Course Announcement Modal for Teachers */}
+      {showAnnouncementModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Post Course Announcement</h3>
+              <button onClick={() => setShowAnnouncementModal(false)} className="text-slate-400 hover:text-white text-xs">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handlePostTeacherAnnouncement} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Target Assigned Course *</label>
+                <select
+                  value={selectedCourseForAnnouncement}
+                  onChange={(e) => setSelectedCourseForAnnouncement(e.target.value)}
+                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                >
+                  <option value="">-- Select Course --</option>
+                  {assignedCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Announcement Title *</label>
+                <input
+                  type="text"
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="e.g., Important Exam Prep Guidance"
+                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Announcement Content *</label>
+                <textarea
+                  rows={4}
+                  value={announcementContent}
+                  onChange={(e) => setAnnouncementContent(e.target.value)}
+                  placeholder="Type your course update or announcement for enrolled students..."
+                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submittingAnnouncement}
+                className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition shadow-lg shadow-purple-500/20 disabled:opacity-50 cursor-pointer"
+              >
+                {submittingAnnouncement ? 'Publishing...' : 'Publish Course Announcement'}
+              </button>
+            </form>
           </div>
         </div>
       )}

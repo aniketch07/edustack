@@ -10,6 +10,7 @@ node_modules/
 
 # Build outputs
 backend/dist/
+backend/.next/
 frontend/.next/
 frontend/out/
 
@@ -47,3 +48,6 @@ docs/
 # Root markdown files (except README)
 /*.md
 !/README.md
+
+# Dummy login credentials (testing only — keep out of the repo)
+dummy-login.txt

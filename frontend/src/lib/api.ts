@@ -23,24 +23,31 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     ...headers,
   };
 
-  const response = await fetch(url, {
-    headers: reqHeaders,
-    ...rest,
-  });
+  try {
+    const response = await fetch(url, {
+      headers: reqHeaders,
+      ...rest,
+    });
 
-  if (response.status === 401) {
-    removeToken();
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
+    if (response.status === 401) {
+      removeToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = data?.message || (Array.isArray(data?.message) ? data.message.join(', ') : 'API request failed');
+      throw new Error(errorMessage);
+    }
+
+    return data as T;
+  } catch (error: any) {
+    if (error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message.includes('fetch'))) {
+      throw new Error(`Unable to connect to EduStack backend API at ${API_BASE_URL}. Please ensure the backend server is running.`);
+    }
+    throw error;
   }
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    const errorMessage = data?.message || (Array.isArray(data?.message) ? data.message.join(', ') : 'API request failed');
-    throw new Error(errorMessage);
-  }
-
-  return data as T;
 }

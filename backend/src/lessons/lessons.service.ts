@@ -108,6 +108,18 @@ export class LessonsService implements OnModuleInit {
     }
   }
 
+  /** Fetch a single lesson's PDF URL (for the download endpoint). Returns null if none. */
+  async findPdfUrl(lessonId: string): Promise<string | null> {
+    try {
+      const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
+      if (lesson?.pdfUrl) return lesson.pdfUrl;
+    } catch (e) {
+      // fall through to memory store
+    }
+    const memLesson = MEMORY_LESSONS.find((l) => l.id === lessonId);
+    return memLesson?.pdfUrl || null;
+  }
+
   async updateProgress(studentId: string, lessonId: string, updateProgressDto: UpdateProgressDto) {
     const { watchedDuration, totalDuration } = updateProgressDto;
     const watchPercentage = (watchedDuration / (totalDuration || 1)) * 100;
@@ -123,6 +135,7 @@ export class LessonsService implements OnModuleInit {
         },
         update: {
           watchedDuration: Math.round(watchedDuration),
+          totalDuration: Math.round(totalDuration || 0),
           completed,
           lastWatchedAt: new Date(),
         },
@@ -130,6 +143,7 @@ export class LessonsService implements OnModuleInit {
           studentId,
           lessonId,
           watchedDuration: Math.round(watchedDuration),
+          totalDuration: Math.round(totalDuration || 0),
           completed,
         },
       });
@@ -148,6 +162,7 @@ export class LessonsService implements OnModuleInit {
       studentId,
       lessonId,
       watchedDuration: Math.round(watchedDuration),
+      totalDuration: Math.round(totalDuration || 0),
       completed: idx !== -1 ? MEMORY_VIDEO_PROGRESS[idx].completed || completed : completed,
       lastWatchedAt: new Date(),
     };
@@ -170,6 +185,25 @@ export class LessonsService implements OnModuleInit {
     const courseLessons = await this.findByCourse(courseId);
     const lessonIds = courseLessons.map((l) => l.id);
 
+    const computeStats = (records: any[]) => {
+      const totalLessons = courseLessons.length;
+      const completedCount = records.filter((p) => p.completed).length;
+
+      // Average watch percentage across all lessons (partial progress counts)
+      let watchedTotal = 0;
+      for (const lesson of courseLessons) {
+        const rec = records.find((p) => p.lessonId === lesson.id);
+        if (rec && rec.totalDuration > 0) {
+          watchedTotal += Math.min(100, (rec.watchedDuration / rec.totalDuration) * 100);
+        } else if (rec && rec.completed) {
+          watchedTotal += 100;
+        }
+      }
+      const percentage = totalLessons > 0 ? Math.round(watchedTotal / totalLessons) : 0;
+
+      return { totalLessons, completedCount, percentage };
+    };
+
     try {
       const dbProgress = await this.prisma.videoProgress.findMany({
         where: {
@@ -181,26 +215,15 @@ export class LessonsService implements OnModuleInit {
       const memProgress = MEMORY_VIDEO_PROGRESS.filter((p) => p.studentId === studentId && lessonIds.includes(p.lessonId));
       const combined = [...dbProgress, ...memProgress];
 
-      const completedCount = combined.filter((p) => p.completed).length;
-      const totalLessons = courseLessons.length;
-      const percentage = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
-
       return {
-        totalLessons,
-        completedCount,
-        percentage,
+        ...computeStats(combined),
         progressList: combined,
       };
     } catch (error) {
       const memProgress = MEMORY_VIDEO_PROGRESS.filter((p) => p.studentId === studentId && lessonIds.includes(p.lessonId));
-      const completedCount = memProgress.filter((p) => p.completed).length;
-      const totalLessons = courseLessons.length;
-      const percentage = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
       return {
-        totalLessons,
-        completedCount,
-        percentage,
+        ...computeStats(memProgress),
         progressList: memProgress,
       };
     }

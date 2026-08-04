@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches, IsInt, Min } from 'class-validator';
 
 export class CreateInstituteDto {
   @IsString()
@@ -25,6 +25,16 @@ export class CreateInstituteDto {
   @IsString()
   @IsOptional()
   secondaryColor?: string;
+
+  // Plan & seat limits
+  @IsString()
+  @IsOptional()
+  planName?: string; // 'Starter' | 'Growth' | 'Enterprise' | 'Custom' — display label
+
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  studentLimit?: number; // source of truth; omit/null = unlimited
 
   // Initial Institute Admin Account Details
   @IsEmail({}, { message: 'Invalid admin email format' })

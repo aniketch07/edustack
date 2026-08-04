@@ -18,13 +18,20 @@ model Institute {
   id             String   @id @default(uuid())
   name           String
   slug           String   @unique
-  logo           String?
+  logoUrl        String?
   primaryColor   String   @default("#3B82F6")
   secondaryColor String   @default("#10B981")
   bannerImage    String?
   contactEmail   String
   contactPhone   String?
   isActive       Boolean  @default(true)
+
+  // Plan & student seat limits — studentLimit is the source of truth (null = unlimited)
+  planName          String   @default("Starter")
+  studentLimit      Int?
+  subscriptionStatus String  @default("ACTIVE")
+  planUpdatedAt     DateTime?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -76,11 +83,12 @@ model Course {
 
   institute   Institute    @relation(fields: [instituteId], references: [id])
   teacher     User         @relation("TeacherCourses", fields: [teacherId], references: [id])
-  lessons     Lesson[]
-  enrollments Enrollment[]
-  tests       Test[]
-  liveClasses LiveClass[]
-  attendances Attendance[]
+  lessons       Lesson[]
+  enrollments   Enrollment[]
+  tests         Test[]
+  liveClasses   LiveClass[]
+  attendances   Attendance[]
+  announcements Announcement[]
 
   @@index([instituteId])
   @@index([teacherId])
@@ -197,6 +205,7 @@ model VideoProgress {
   studentId       String
   lessonId        String
   watchedDuration Int      @default(0)
+  totalDuration   Int      @default(0)
   completed       Boolean  @default(false)
   lastWatchedAt   DateTime @default(now())
 
@@ -211,6 +220,7 @@ model VideoProgress {
 model Announcement {
   id          String   @id @default(uuid())
   instituteId String
+  courseId    String?
   title       String
   content     String   @db.Text
   isPublished Boolean  @default(false)
@@ -218,8 +228,10 @@ model Announcement {
   updatedAt   DateTime @updatedAt
 
   institute Institute @relation(fields: [instituteId], references: [id])
+  course    Course?   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([instituteId])
+  @@index([courseId])
   @@index([instituteId, isPublished])
   @@index([createdAt])
 }

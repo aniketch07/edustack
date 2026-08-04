@@ -9,6 +9,10 @@ export class CreateAnnouncementDto {
   @IsNotEmpty({ message: 'Announcement content is required' })
   content: string;
 
+  @IsString()
+  @IsOptional()
+  courseId?: string;
+
   @IsBoolean()
   @IsOptional()
   isPublished?: boolean;

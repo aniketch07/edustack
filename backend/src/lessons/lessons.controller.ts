@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Body, UseGuards, NotFoundException, BadRequestException, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { LessonsService } from './lessons.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateProgressDto } from './dto/update-progress.dto';
@@ -25,6 +26,32 @@ export class LessonsController {
   @Get('courses/:courseId/lessons')
   async findByCourse(@Param('courseId') courseId: string) {
     return this.lessonsService.findByCourse(courseId);
+  }
+
+  /**
+   * Streams a lesson's PDF as an attachment download.
+   * Keeps the raw S3 URL hidden and forces a direct download.
+   */
+  @Get('lessons/:lessonId/pdf')
+  async downloadPdf(@Param('lessonId') lessonId: string, @Res() res: Response) {
+    const pdfUrl = await this.lessonsService.findPdfUrl(lessonId);
+    if (!pdfUrl) throw new NotFoundException('PDF not found for this lesson');
+
+    try {
+      const response = await fetch(pdfUrl);
+      if (!response.ok) throw new BadRequestException('Could not fetch PDF file');
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      // Derive a friendly filename from the URL
+      const filename = decodeURIComponent(pdfUrl.split('/').pop() || 'notes.pdf');
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (e: any) {
+      throw new BadRequestException(`Failed to download PDF: ${e.message}`);
+    }
   }
 
   @Post('lessons/:lessonId/progress')

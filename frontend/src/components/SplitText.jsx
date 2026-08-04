@@ -110,12 +110,14 @@ export default function SplitText({
       ref={containerRef}
       className={`split-parent inline-block overflow-hidden ${className}`}
       style={{ textAlign }}
+      suppressHydrationWarning
     >
       {items.map((item) => (
         <span
           key={item.key}
           className="split-item inline-block will-change-transform opacity-0"
           style={{ whiteSpace: item.content === '\u00A0' ? 'pre' : 'normal' }}
+          suppressHydrationWarning
         >
           {item.content}
           {item.isWord ? '\u00A0' : ''}
