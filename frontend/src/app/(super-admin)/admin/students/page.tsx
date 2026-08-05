@@ -70,10 +70,16 @@ export default function EnrolledStudentsManagementPage() {
         setOpenInstitutes(initialOpen);
       }
       if (analytics?.metrics) {
+        // Count real enrollments from the actual student data
+        const realEnrollments = (analytics.groupedStudents || []).reduce(
+          (sum: number, g: any) =>
+            sum + (g.students || []).reduce((s: number, st: any) => s + (st.enrollmentsCount || 0), 0),
+          0,
+        );
         setMetrics({
           totalStudents: analytics.metrics.totalStudents || 0,
           totalInstitutes: analytics.metrics.totalInstitutes || 0,
-          totalEnrollments: (analytics.metrics.totalStudents || 0) * 2,
+          totalEnrollments: realEnrollments,
         });
       }
       const instData = await apiFetch<any>('/institutes');
