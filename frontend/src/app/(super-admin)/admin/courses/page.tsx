@@ -60,10 +60,15 @@ export default function PublishedCoursesCatalogPage() {
         setOpenInstitutes(initialOpen);
       }
       if (analytics?.metrics) {
+        // Count real paid courses (price > 0) from the actual grouped data
+        const paid = (analytics.groupedCourses || []).reduce(
+          (sum: number, g: any) => sum + (g.courses || []).filter((c: any) => c.price > 0).length,
+          0,
+        );
         setMetrics({
           totalCourses: analytics.metrics.totalCourses || 0,
           totalInstitutes: analytics.metrics.totalInstitutes || 0,
-          paidCourses: Math.max(1, Math.round((analytics.metrics.totalCourses || 0) * 0.7)),
+          paidCourses: paid,
         });
       }
       const instData = await apiFetch<any>('/institutes');
