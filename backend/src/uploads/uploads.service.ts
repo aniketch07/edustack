@@ -120,10 +120,11 @@ export class UploadsService {
 
       const uploadUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
 
-      // Build the public CDN URL
+      // Build the public CDN URL — always ensure a valid http(s) prefix
       let publicUrl: string;
       if (this.publicDomain) {
-        publicUrl = `${this.publicDomain}/${fileKey}`;
+        const domain = this.publicDomain.startsWith('http') ? this.publicDomain : `https://${this.publicDomain}`;
+        publicUrl = `${domain}/${fileKey}`;
       } else {
         // Default to standard S3 URL (requires public-read bucket policy or ACL)
         publicUrl = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${fileKey}`;
