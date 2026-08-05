@@ -622,27 +622,21 @@ export class InstitutesService implements OnModuleInit {
             admins: Math.round((totalAdmins / safeTotalUsers) * 100),
           },
         },
-        growthTimeline: [
-          { period: 'W1', institutes: 1, users: 3 },
-          { period: 'W2', institutes: 2, users: 6 },
-          { period: 'W3', institutes: 3, users: 10 },
-          { period: 'W4', institutes: 4, users: 15 },
-          { period: 'W5', institutes: 5, users: 22 },
-          { period: 'W6', institutes: totalInstitutes, users: totalUsers },
-        ],
-        topInstitutes: MEMORY_INSTITUTES.slice(0, 5),
+        // DB is down — no real time-series available. Return empty/zero instead of fabricated numbers.
+        growthTimeline: [],
+        topInstitutes: [],
         sparklines: {
-          institutesTrend: [1, 2, 3, 4, 5, totalInstitutes],
-          teachersTrend: [1, 2, 4, 6, 8, totalTeachers],
-          studentsTrend: [3, 6, 12, 18, 25, totalStudents],
-          coursesTrend: [1, 2, 4, 6, 8, totalCourses],
+          institutesTrend: [],
+          teachersTrend: [],
+          studentsTrend: [],
+          coursesTrend: [],
         },
         healthSignals: {
-          apiStatus: 'UP',
-          dbStatus: 'DEV_STORE',
-          responseTimeMs: 8,
-          totalUploads: totalCourses * 2,
-          storageUsedMb: 145.5,
+          apiStatus: 'UNKNOWN',
+          dbStatus: 'OFFLINE',
+          responseTimeMs: null,
+          totalUploads: 0,
+          storageUsedMb: 0,
           pendingItems: 0,
           storageReal: false,
         },
@@ -650,6 +644,8 @@ export class InstitutesService implements OnModuleInit {
         groupedFaculty: [],
         groupedStudents: [],
         groupedCourses: [],
+        // Explicit flag so the frontend can show an honest "unavailable" state
+        dataUnavailable: true,
       };
     }
   }

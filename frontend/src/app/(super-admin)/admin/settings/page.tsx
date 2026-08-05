@@ -16,6 +16,7 @@ import {
   Key,
   Database,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
@@ -63,17 +64,18 @@ export default function PlatformSettingsPage() {
     );
   }
 
+  const configUnavailable = settings === null;
   const liveConfig = settings || {
-    awsRegion: 'ap-south-1',
-    bucketName: 'edustack-storage',
-    videoMaxMb: 500,
-    pdfMaxMb: 50,
-    imageMaxMb: 25,
-    dbConnected: true,
-    dbLatencyMs: 12,
-    isolationScope: '@@unique([instituteId, email])',
-    jwtAuthGuard: 'Enabled',
-    nodeEnv: 'development',
+    awsRegion: '—',
+    bucketName: '—',
+    videoMaxMb: null,
+    pdfMaxMb: null,
+    imageMaxMb: null,
+    dbConnected: null,
+    dbLatencyMs: null,
+    isolationScope: '—',
+    jwtAuthGuard: '—',
+    nodeEnv: '—',
   };
 
   return (
@@ -160,14 +162,14 @@ export default function PlatformSettingsPage() {
                     <HardDrive className="w-3.5 h-3.5 text-slate-500" />
                     Video Upload Limit
                   </span>
-                  <span className="text-emerald-400 font-bold">{liveConfig.videoMaxMb} MB (MP4 / WebM)</span>
+                  <span className="text-emerald-400 font-bold">{liveConfig.videoMaxMb != null ? `${liveConfig.videoMaxMb} MB (MP4 / WebM)` : 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-400">
                   <span className="flex items-center gap-1.5">
                     <HardDrive className="w-3.5 h-3.5 text-slate-500" />
                     PDF Notes Limit
                   </span>
-                  <span className="text-emerald-400 font-bold">{liveConfig.pdfMaxMb} MB</span>
+                  <span className="text-emerald-400 font-bold">{liveConfig.pdfMaxMb != null ? `${liveConfig.pdfMaxMb} MB` : 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -185,7 +187,7 @@ export default function PlatformSettingsPage() {
                   </div>
                 </div>
                 <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold">
-                  {liveConfig.dbLatencyMs}ms Latency
+                  {liveConfig.dbLatencyMs != null ? `${liveConfig.dbLatencyMs}ms Latency` : 'Latency N/A'}
                 </span>
               </div>
 
@@ -195,10 +197,17 @@ export default function PlatformSettingsPage() {
                     <Database className="w-3.5 h-3.5 text-slate-500" />
                     PostgreSQL Connection
                   </span>
-                  <span className="text-emerald-400 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    HEALTHY
-                  </span>
+                  {liveConfig.dbConnected ? (
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      HEALTHY
+                    </span>
+                  ) : (
+                    <span className="text-amber-400 font-bold flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      {configUnavailable ? 'UNAVAILABLE' : 'OFFLINE'}
+                    </span>
+                  )}
                 </div>
                 <div className="flex justify-between items-center text-slate-400">
                   <span className="flex items-center gap-1.5">

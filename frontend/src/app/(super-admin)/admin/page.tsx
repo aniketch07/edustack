@@ -113,35 +113,32 @@ export default function SuperAdminDashboard() {
     );
   }
 
+  // When analytics load, use real data. When they're unavailable (loading/error),
+  // show an honest "unavailable" state instead of fabricated numbers.
+  const dataUnavailable = analyticsData === null;
+
   const roleDist = analyticsData?.roleDistribution || {
     students: metrics.totalStudents,
     teachers: metrics.totalTeachers,
     instituteAdmins: 0,
-    percentages: { students: 70, teachers: 20, admins: 10 },
+    percentages: { students: 0, teachers: 0, admins: 0 },
   };
 
-  const growthTimeline = analyticsData?.growthTimeline || [
-    { period: 'W1', institutes: 1, users: 3 },
-    { period: 'W2', institutes: 2, users: 6 },
-    { period: 'W3', institutes: 3, users: 10 },
-    { period: 'W4', institutes: 4, users: 15 },
-    { period: 'W5', institutes: 5, users: 22 },
-    { period: 'W6', institutes: metrics.totalInstitutes, users: metrics.totalUsers },
-  ];
+  const growthTimeline = analyticsData?.growthTimeline || [];
 
   const sparklines = analyticsData?.sparklines || {
-    institutesTrend: [1, 2, 3, metrics.totalInstitutes],
-    teachersTrend: [1, 3, 5, metrics.totalTeachers],
-    studentsTrend: [5, 15, 30, metrics.totalStudents],
-    coursesTrend: [1, 4, 8, metrics.totalCourses],
+    institutesTrend: [],
+    teachersTrend: [],
+    studentsTrend: [],
+    coursesTrend: [],
   };
 
   const healthSignals = analyticsData?.healthSignals || {
-    apiStatus: 'UP',
-    dbStatus: 'HEALTHY (PostgreSQL)',
-    responseTimeMs: 12,
-    totalUploads: metrics.totalCourses * 2,
-    storageUsedMb: 120.5,
+    apiStatus: dataUnavailable ? null : 'UNKNOWN',
+    dbStatus: dataUnavailable ? 'UNAVAILABLE' : 'UNKNOWN',
+    responseTimeMs: null,
+    totalUploads: 0,
+    storageUsedMb: 0,
     pendingItems: 0,
     storageReal: false,
   };
@@ -173,44 +170,55 @@ export default function SuperAdminDashboard() {
         {/* Platform Health Signal Strip */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50" />
-            <span className="text-xs font-bold text-white tracking-tight">System Status: All Services Operational</span>
+            {dataUnavailable ? (
+              <>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-lg shadow-amber-500/50" />
+                <span className="text-xs font-bold text-white tracking-tight">System Status: Unavailable</span>
+              </>
+            ) : (
+              <>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50" />
+                <span className="text-xs font-bold text-white tracking-tight">System Status: All Services Operational</span>
+              </>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-6 text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <Server className="w-4 h-4 text-blue-400" />
-              <span>API Gateway:</span>
-              <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                {healthSignals.apiStatus} ({healthSignals.responseTimeMs}ms)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-purple-400" />
-              <span>Database:</span>
-              <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                {healthSignals.dbStatus}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-teal-400" />
-              <span>Cloud Storage:</span>
-              <span className="text-white font-mono font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                {healthSignals.storageUsedMb} MB
-              </span>
-              {healthSignals.storageReal ? (
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">
-                  LIVE
+          {!dataUnavailable && (
+            <div className="flex flex-wrap items-center gap-6 text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <Server className="w-4 h-4 text-blue-400" />
+                <span>API Gateway:</span>
+                <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  {healthSignals.apiStatus ?? '—'} {healthSignals.responseTimeMs != null ? `(${healthSignals.responseTimeMs}ms)` : ''}
                 </span>
-              ) : (
-                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold">
-                  EST.
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-purple-400" />
+                <span>Database:</span>
+                <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  {healthSignals.dbStatus}
                 </span>
-              )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-teal-400" />
+                <span>Cloud Storage:</span>
+                <span className="text-white font-mono font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                  {healthSignals.storageUsedMb} MB
+                </span>
+                {healthSignals.storageReal ? (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">
+                    LIVE
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold">
+                    EST.
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* 4 Interactive Module KPI Cards */}
