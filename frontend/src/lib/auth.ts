@@ -1,4 +1,5 @@
 import { User, UserRole } from '@/types';
+import { disconnectSocket } from './socket';
 
 const TOKEN_KEY = 'edustack_auth_token';
 const USER_KEY = 'edustack_user_data';
@@ -21,6 +22,8 @@ export const removeToken = (): void => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // Drop the old socket so the next login connects with the fresh token
+    disconnectSocket();
   }
 };
 

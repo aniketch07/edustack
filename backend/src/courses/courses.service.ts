@@ -7,6 +7,7 @@ import { loadDevStore } from '../common/dev-store';
 import { syncAllDevStore } from '../common/store-sync';
 import { sanitizeText } from '../common/sanitize';
 import { MEMORY_INSTITUTES, MEMORY_USERS } from '../institutes/institutes.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export let MEMORY_COURSES: any[] = [];
 
@@ -20,7 +21,10 @@ if (initialStore.courses) {
 export class CoursesService implements OnModuleInit {
   private readonly logger = new Logger(CoursesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   onModuleInit() {
     const loaded = loadDevStore();
@@ -68,6 +72,15 @@ export class CoursesService implements OnModuleInit {
           },
         },
       });
+
+      // Realtime emit: Notify institute staff and assigned teacher
+      this.realtime.emitToInstitute(instituteId, 'course:created', { course });
+      if (validTeacherId) {
+        this.realtime.emitToUsers([validTeacherId], 'course:assigned', {
+          courseId: course.id,
+          courseTitle: course.title,
+        });
+      }
 
       return {
         message: 'Course created successfully',
@@ -268,16 +281,32 @@ export class CoursesService implements OnModuleInit {
     try {
       const existing = await this.prisma.course.findFirst({ where: { id, instituteId } });
       if (existing) {
+        // Cascade-delete dependents first to avoid FK constraint violations
+        await this.prisma.testAttempt.deleteMany({ where: { test: { courseId: id } } });
+        await this.prisma.test.deleteMany({ where: { courseId: id } });
+        await this.prisma.lesson.deleteMany({ where: { courseId: id } });
+        await this.prisma.enrollment.deleteMany({ where: { courseId: id } });
+        await this.prisma.attendance.deleteMany({ where: { courseId: id } });
+        await this.prisma.announcement.deleteMany({ where: { courseId: id } });
         await this.prisma.course.delete({ where: { id } });
+        this.logger.log(`Course ${id} deleted from database with all dependents.`);
       }
-    } catch (e) {
-      this.logger.warn(`Database remove failed for course: ${id}. Falling back to dev store.`);
+    } catch (e: any) {
+      // Re-throw genuine DB failures instead of silently returning success
+      this.logger.error(`Database remove failed for course: ${id}. Error: ${e.message}`);
+      throw e;
     }
-    const memIndex = MEMORY_COURSES.findIndex((c) => c.id === id && c.instituteId === instituteId);
+
+    // Remove from memory store along with all dependents
+    const memIndex = MEMORY_COURSES.findIndex((c) => c.id === id);
     if (memIndex !== -1) {
       MEMORY_COURSES.splice(memIndex, 1);
-      syncAllDevStore();
     }
+    // Always sync to disk so the deletion survives server restart
+    syncAllDevStore();
+
+    // Realtime notification: Notify all clients in the institute that this course was deleted
+    this.realtime.emitToInstitute(instituteId, 'course:deleted', { id });
 
     return { message: 'Course deleted successfully' };
   }

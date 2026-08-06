@@ -10,6 +10,7 @@ import { MEMORY_COURSES } from '../courses/courses.service';
 import { MEMORY_ENROLLMENTS } from '../enrollments/enrollments.service';
 import { MEMORY_LESSONS } from '../lessons/lessons.service';
 import { MEMORY_ATTENDANCE } from '../attendance/attendance.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export let MEMORY_TESTS: any[] = [];
 export let MEMORY_QUESTIONS: any[] = [];
@@ -24,7 +25,10 @@ if (initialStore.testAttempts) MEMORY_TEST_ATTEMPTS.push(...initialStore.testAtt
 export class TestsService implements OnModuleInit {
   private readonly logger = new Logger(TestsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   onModuleInit() {
     const loaded = loadDevStore();
@@ -86,6 +90,8 @@ export class TestsService implements OnModuleInit {
         },
       });
 
+      this.realtime.emitToCourse(courseId, 'test:published', { courseId, test });
+
       return {
         message: 'MCQ Test created successfully',
         test,
@@ -122,6 +128,8 @@ export class TestsService implements OnModuleInit {
     MEMORY_TESTS.push(newTest);
     MEMORY_QUESTIONS.push(...createdQuestions);
     syncAllDevStore();
+
+    this.realtime.emitToCourse(courseId, 'test:published', { courseId, test: newTest });
 
     return {
       message: 'MCQ Test created successfully (Dev Store)',
@@ -348,6 +356,13 @@ export class TestsService implements OnModuleInit {
         },
       });
 
+      this.realtime.emitToCourse(
+        test.courseId,
+        'test:attempted',
+        { courseId: test.courseId, testId, attempt },
+        { includeStudentId: studentId },
+      );
+
       return {
         message: 'Test submitted and graded successfully',
         attempt,
@@ -369,6 +384,13 @@ export class TestsService implements OnModuleInit {
 
     MEMORY_TEST_ATTEMPTS.push(newAttempt);
     syncAllDevStore();
+
+    this.realtime.emitToCourse(
+      test.courseId,
+      'test:attempted',
+      { courseId: test.courseId, testId, attempt: newAttempt },
+      { includeStudentId: studentId },
+    );
 
     return {
       message: 'Test submitted and graded successfully (Dev Store)',

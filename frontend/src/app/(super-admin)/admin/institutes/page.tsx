@@ -25,6 +25,8 @@ import {
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, UserRole } from '@/types';
+import { useToast } from '@/components/Toast';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
 
 function SeatUsageCell({ used, limit }: { used: number; limit: number }) {
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
@@ -67,6 +69,7 @@ function SeatUsageCell({ used, limit }: { used: number; limit: number }) {
 
 export default function InstitutesManagementModulePage() {
   const router = useRouter();
+  const toast = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [institutes, setInstitutes] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({ totalInstitutes: 0, totalTeachers: 0, totalStudents: 0, totalCourses: 0 });
@@ -92,6 +95,13 @@ export default function InstitutesManagementModulePage() {
       fetchInstitutesData();
     }
   }, [router]);
+
+  // Listen to realtime platform socket events for live sync
+  useRealtimeEvents({
+    'course:created': () => fetchInstitutesData(),
+    'course:deleted': () => fetchInstitutesData(),
+    'announcement:created': () => fetchInstitutesData(),
+  });
 
   const fetchInstitutesData = async () => {
     try {
@@ -128,8 +138,9 @@ export default function InstitutesManagementModulePage() {
       setInstitutes((prev) =>
         prev.map((item) => (item.id === inst.id ? { ...item, isActive: nextState } : item)),
       );
-    } catch (e) {
-      console.error('Failed to update status:', e);
+      toast.success(`Institute "${inst.name}" ${nextState ? 'activated' : 'suspended'}.`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update institute status');
     }
   };
 
@@ -141,10 +152,11 @@ export default function InstitutesManagementModulePage() {
       await apiFetch(`/institutes/${selectedInstitute.id}`, {
         method: 'DELETE',
       });
+      toast.success(`Institute "${selectedInstitute.name}" deleted successfully.`);
       setSelectedInstitute(null);
       fetchInstitutesData();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete institute');
+      toast.error(err.message || 'Failed to delete institute');
     } finally {
       setDeleting(false);
     }

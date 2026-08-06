@@ -13,6 +13,7 @@ import {
   Palette,
   Trash2,
   CheckCircle2,
+  ShieldCheck,
   Building2,
   RefreshCw,
   X,
@@ -25,9 +26,22 @@ import { getUser, removeToken, setUser, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
 import FileUpload from '@/components/FileUpload';
+import { useAnnouncementToasts } from '@/hooks/useAnnouncementToasts';
 
 export default function InstituteAdminDashboard() {
   const router = useRouter();
+  useAnnouncementToasts(
+    (newAnnouncement) => {
+      if (newAnnouncement?.id) {
+        setAnnouncements((prev) => [newAnnouncement, ...prev.filter((a) => a.id !== newAnnouncement.id)]);
+      }
+    },
+    (deletedId) => {
+      if (deletedId) {
+        setAnnouncements((prev) => prev.filter((a) => a.id !== deletedId));
+      }
+    },
+  );
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [studentCount, setStudentCount] = useState(0);
   const [teacherCount, setTeacherCount] = useState(0);
@@ -320,16 +334,33 @@ export default function InstituteAdminDashboard() {
                 {announcements.map((a) => (
                   <div
                     key={a.id}
-                    className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700/80 flex items-start justify-between gap-3 transition-colors"
+                    className={`p-3.5 rounded-xl border backdrop-blur-md transition-all flex items-start justify-between gap-3 ${
+                      a.course
+                        ? 'border-l-4 border-l-purple-500 border-purple-500/20 bg-gradient-to-r from-purple-950/20 via-slate-900/90 to-slate-900/90'
+                        : 'border-l-4 border-l-blue-500 border-blue-500/20 bg-gradient-to-r from-blue-950/20 via-slate-900/90 to-slate-900/90'
+                    }`}
                   >
-                    <div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        {a.course ? (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                            <BookOpen className="w-3 h-3 text-purple-400" />
+                            Course: {a.course.title}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-blue-400" />
+                            Official Institute Broadcast
+                          </span>
+                        )}
+                      </div>
                       <h4 className="text-xs font-bold text-white">{a.title}</h4>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{a.content}</p>
+                      <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">{a.content}</p>
                     </div>
                     <button
                       onClick={() => handleDeleteAnnouncement(a.id)}
                       disabled={deletingAnnouncementId === a.id}
-                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors shrink-0 disabled:opacity-50 cursor-pointer mt-1"
                       title="Delete Announcement"
                     >
                       {deletingAnnouncementId === a.id ? (

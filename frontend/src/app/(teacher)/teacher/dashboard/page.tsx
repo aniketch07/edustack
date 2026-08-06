@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Users, Video, FileText, HelpCircle, LogOut, Search, UserCheck, CheckCircle2, Plus, Calendar, FilePlus, Trash2, Clock, Award, Megaphone, ExternalLink, Image as ImageIcon, Loader2, X, Sparkles } from 'lucide-react';
+import { BookOpen, Users, Video, FileText, HelpCircle, LogOut, Search, UserCheck, CheckCircle2, Plus, Calendar, FilePlus, Trash2, Clock, Award, Megaphone, ExternalLink, Image as ImageIcon, Loader2, X, Sparkles, ShieldCheck } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
 import FileUpload from '@/components/FileUpload';
 import { useToast } from '@/components/Toast';
 import { useAnnouncementToasts } from '@/hooks/useAnnouncementToasts';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
 
 interface QuestionForm {
   question: string;
@@ -20,7 +21,40 @@ interface QuestionForm {
 export default function TeacherDashboard() {
   const router = useRouter();
   const toast = useToast();
-  useAnnouncementToasts();
+  useAnnouncementToasts(
+    (newAnnouncement) => {
+      if (newAnnouncement?.id) {
+        setAnnouncements((prev) => [newAnnouncement, ...prev.filter((a) => a.id !== newAnnouncement.id)]);
+      }
+    },
+    (deletedId) => {
+      if (deletedId) {
+        setAnnouncements((prev) => prev.filter((a) => a.id !== deletedId));
+      }
+    },
+  );
+
+  // Live updates: know the instant a student submits a test, without refreshing.
+  // (Announcements are handled inside useAnnouncementToasts.)
+  useRealtimeEvents({
+    'course:assigned': (payload: any) => {
+      const title = payload?.courseTitle || 'a course';
+      toast.info(`📚 You have been assigned to ${title}`);
+      fetchDashboardData();
+    },
+    'course:created': () => {
+      fetchDashboardData();
+    },
+    'course:deleted': (payload: any) => {
+      if (payload?.id) {
+        setAssignedCourses((prev) => prev.filter((c) => c.id !== payload.id));
+      }
+    },
+    'test:attempted': () => {
+      toast.info('📊 A student just submitted a test');
+    },
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [assignedCourses, setAssignedCourses] = useState<Course[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -697,21 +731,44 @@ export default function TeacherDashboard() {
           {announcements.length === 0 ? (
             <p className="text-xs text-slate-400">No announcements published yet.</p>
           ) : (
-            <div className="space-y-2">
-              {announcements.slice(0, 3).map((a) => (
-                <div key={a.id} className="text-xs text-slate-300 flex items-start gap-2">
-                  {a.course ? (
-                    <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold shrink-0">
-                      {a.course.title}
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
-                      Institute Wide
-                    </span>
-                  )}
+            <div className="space-y-3">
+              {announcements.slice(0, 5).map((a) => (
+                <div
+                  key={a.id}
+                  className={`p-4 rounded-xl border-l-4 backdrop-blur-md shadow-md space-y-2 transition-all hover:border-opacity-60 ${
+                    a.course
+                      ? 'border-l-purple-500 border-purple-500/20 bg-gradient-to-r from-purple-950/20 via-slate-950/90 to-slate-950/90'
+                      : 'border-l-blue-500 border-blue-500/20 bg-gradient-to-r from-blue-950/20 via-slate-950/90 to-slate-950/90'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    {a.course ? (
+                      <span className="px-2.5 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                        <BookOpen className="w-3 h-3 text-purple-400" />
+                        Course: {a.course.title}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-blue-400" />
+                        Official Institute Broadcast
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                      <span>{a.course ? '👨‍🏫 Instructor Notice' : '🏛️ Admin Notice'}</span>
+                      {a.createdAt && (
+                        <>
+                          <span>•</span>
+                          <Calendar className="w-3 h-3 text-slate-500" />
+                          <span>{new Date(a.createdAt).toLocaleDateString()}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
                   <div>
-                    <span className="font-bold text-white">{a.title}: </span>
-                    <span>{a.content}</span>
+                    <h4 className="text-xs font-extrabold text-white tracking-wide">{a.title}</h4>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">{a.content}</p>
                   </div>
                 </div>
               ))}

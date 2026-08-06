@@ -26,9 +26,12 @@ import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, UserRole } from '@/types';
 import ResetPasswordModal from '@/components/ResetPasswordModal';
+import { useToast } from '@/components/Toast';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
 
 export default function EnrolledStudentsManagementPage() {
   const router = useRouter();
+  const toast = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [groupedStudents, setGroupedStudents] = useState<any[]>([]);
   const [institutes, setInstitutes] = useState<any[]>([]);
@@ -56,6 +59,11 @@ export default function EnrolledStudentsManagementPage() {
       fetchStudentsData();
     }
   }, [router]);
+
+  useRealtimeEvents({
+    'course:enrolled': () => fetchStudentsData(),
+    'course:unenrolled': () => fetchStudentsData(),
+  });
 
   const fetchStudentsData = async () => {
     try {

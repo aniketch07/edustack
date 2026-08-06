@@ -6,6 +6,7 @@ import { MEMORY_INSTITUTES, MEMORY_USERS } from '../institutes/institutes.servic
 import { MEMORY_COURSES } from '../courses/courses.service';
 import { MEMORY_LESSONS } from '../lessons/lessons.service';
 import { MEMORY_ATTENDANCE } from '../attendance/attendance.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export let MEMORY_ENROLLMENTS: any[] = [];
 
@@ -18,7 +19,10 @@ if (initialStore.enrollments) {
 export class EnrollmentsService implements OnModuleInit {
   private readonly logger = new Logger(EnrollmentsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   onModuleInit() {
     const loaded = loadDevStore();
@@ -51,6 +55,12 @@ export class EnrollmentsService implements OnModuleInit {
 
         const currentCount = await this.prisma.enrollment.count({
           where: { courseId },
+        });
+
+        // Realtime notification: Notify enrolled students instantly
+        this.realtime.emitToUsers(studentIds, 'course:enrolled', {
+          courseId,
+          courseTitle: course.title,
         });
 
         return {
@@ -96,6 +106,12 @@ export class EnrollmentsService implements OnModuleInit {
     }
 
     syncAllDevStore();
+
+    const memCourse = MEMORY_COURSES.find((c) => c.id === courseId);
+    this.realtime.emitToUsers(studentIds, 'course:enrolled', {
+      courseId,
+      courseTitle: memCourse?.title || 'New Course',
+    });
 
     return {
       message: 'Students allocated to course successfully (Dev Store)',
@@ -168,14 +184,17 @@ export class EnrollmentsService implements OnModuleInit {
           course: { instituteId },
         },
       });
-    } catch (e) {
-      this.logger.warn(`Database unenroll failed for student ${studentId} in course ${courseId}. Falling back to dev store.`);
+    } catch (e: any) {
+      this.logger.error(`Database unenroll failed for student ${studentId} in course ${courseId}. Error: ${e.message}`);
+      throw e;
     }
     const index = MEMORY_ENROLLMENTS.findIndex((e) => e.courseId === courseId && e.studentId === studentId);
     if (index !== -1) {
       MEMORY_ENROLLMENTS.splice(index, 1);
-      syncAllDevStore();
     }
+    syncAllDevStore();
+    // Realtime notification: Notify student socket that they were unenrolled from courseId
+    this.realtime.emitToUsers([studentId], 'course:unenrolled', { courseId });
 
     return { message: 'Student removed from course' };
   }

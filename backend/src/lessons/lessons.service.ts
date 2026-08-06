@@ -12,6 +12,7 @@ import { MEMORY_ATTENDANCE } from '../attendance/attendance.service';
 import { MEMORY_TESTS, MEMORY_QUESTIONS, MEMORY_TEST_ATTEMPTS } from '../tests/tests.service';
 import { MEMORY_ANNOUNCEMENTS } from '../announcements/announcements.service';
 import { MEMORY_LIVE_CLASSES } from '../live-classes/live-classes.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export let MEMORY_LESSONS: any[] = [];
 export let MEMORY_VIDEO_PROGRESS: any[] = [];
@@ -24,7 +25,10 @@ if (initialStore.videoProgress) MEMORY_VIDEO_PROGRESS.push(...initialStore.video
 export class LessonsService implements OnModuleInit {
   private readonly logger = new Logger(LessonsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   onModuleInit() {
     const loaded = loadDevStore();
@@ -60,6 +64,8 @@ export class LessonsService implements OnModuleInit {
         },
       });
 
+      this.realtime.emitToCourse(courseId, 'lesson:created', { courseId, lesson });
+
       return {
         message: 'Lesson added successfully',
         lesson,
@@ -93,6 +99,8 @@ export class LessonsService implements OnModuleInit {
     }
 
     syncAllDevStore();
+
+    this.realtime.emitToCourse(courseId, 'lesson:created', { courseId, lesson: newLesson });
 
     return {
       message: 'Lesson added successfully (Dev Store)',

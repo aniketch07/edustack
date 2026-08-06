@@ -2,15 +2,59 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Video, FileText, Calendar, LogOut, Search, UserCheck, Play, Download, CheckCircle2, XCircle, Award, HelpCircle, Clock, CheckSquare, Megaphone, ExternalLink, Check, Image as ImageIcon, X, Loader2 } from 'lucide-react';
+import { BookOpen, Video, FileText, Calendar, LogOut, Search, UserCheck, Play, Download, CheckCircle2, XCircle, Award, HelpCircle, Clock, CheckSquare, Megaphone, ExternalLink, Check, Image as ImageIcon, X, Loader2, ShieldCheck } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired, getToken } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
 import { useAnnouncementToasts } from '@/hooks/useAnnouncementToasts';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
+import { useToast } from '@/components/Toast';
 
 export default function StudentDashboard() {
   const router = useRouter();
-  useAnnouncementToasts();
+  const toast = useToast();
+  useAnnouncementToasts(
+    (newAnnouncement) => {
+      if (newAnnouncement?.id) {
+        setAnnouncements((prev) => [newAnnouncement, ...prev.filter((a) => a.id !== newAnnouncement.id)]);
+      }
+    },
+    (deletedId) => {
+      if (deletedId) {
+        setAnnouncements((prev) => prev.filter((a) => a.id !== deletedId));
+      }
+    },
+  );
+
+  // Live updates: new lessons/tests announced instantly via the socket.
+  // (Announcements are handled inside useAnnouncementToasts.)
+  useRealtimeEvents({
+    'course:enrolled': (payload: any) => {
+      const title = payload?.courseTitle || 'a new course';
+      toast.success(`🎉 You have been enrolled in ${title}!`);
+      fetchStudentData();
+    },
+    'course:unenrolled': (payload: any) => {
+      const cId = payload?.courseId;
+      if (cId) {
+        setEnrolledCourses((prev) => prev.filter((c) => c.id !== cId));
+        toast.info('You have been unenrolled from a course.');
+      }
+    },
+    'course:deleted': (payload: any) => {
+      if (payload?.id) {
+        setEnrolledCourses((prev) => prev.filter((c) => c.id !== payload.id));
+      }
+    },
+    'lesson:created': (payload: any) => {
+      const lesson = payload?.lesson;
+      if (lesson?.title) toast.info(`🎬 New lesson available: ${lesson.title}`);
+    },
+    'test:published': (payload: any) => {
+      const test = payload?.test;
+      if (test?.title) toast.info(`📝 New test published: ${test.title}`);
+    },
+  });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -324,28 +368,59 @@ export default function StudentDashboard() {
 
         {/* Announcements Banner */}
         {announcements.length > 0 && (
-          <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-2">
-            <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
-              <Megaphone className="w-4 h-4" />
-              Academy Announcements Broadcast
-            </div>
-            {announcements.slice(0, 3).map((a) => (
-              <div key={a.id} className="text-xs text-slate-300 flex items-start gap-2">
-                {a.course ? (
-                  <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold shrink-0">
-                    {a.course.title}
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
-                    Institute Wide
-                  </span>
-                )}
-                <div>
-                  <span className="font-bold text-white">{a.title}: </span>
-                  <span>{a.content}</span>
-                </div>
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3.5 shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
+                <Megaphone className="w-4 h-4 text-purple-400" />
+                <span>Academy Announcements & Broadcasts</span>
               </div>
-            ))}
+              <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold">
+                {announcements.length} Active Notice{announcements.length > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {announcements.slice(0, 5).map((a) => (
+                <div
+                  key={a.id}
+                  className={`p-4 rounded-xl border-l-4 backdrop-blur-md shadow-md space-y-2 transition-all hover:border-opacity-60 ${
+                    a.course
+                      ? 'border-l-purple-500 border-purple-500/20 bg-gradient-to-r from-purple-950/20 via-slate-950/90 to-slate-950/90'
+                      : 'border-l-blue-500 border-blue-500/20 bg-gradient-to-r from-blue-950/20 via-slate-950/90 to-slate-950/90'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    {a.course ? (
+                      <span className="px-2.5 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                        <BookOpen className="w-3 h-3 text-purple-400" />
+                        Course: {a.course.title}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-blue-400" />
+                        Official Institute Broadcast
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                      <span>{a.course ? '👨‍🏫 Instructor Notice' : '🏛️ Admin Notice'}</span>
+                      {a.createdAt && (
+                        <>
+                          <span>•</span>
+                          <Calendar className="w-3 h-3 text-slate-500" />
+                          <span>{new Date(a.createdAt).toLocaleDateString()}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-extrabold text-white tracking-wide">{a.title}</h4>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">{a.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

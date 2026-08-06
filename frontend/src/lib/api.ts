@@ -23,7 +23,7 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     ...headers,
   };
 
-  try {
+  const executeFetch = async (): Promise<T> => {
     const response = await fetch(url, {
       headers: reqHeaders,
       ...rest,
@@ -44,9 +44,19 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     }
 
     return data as T;
+  };
+
+  try {
+    return await executeFetch();
   } catch (error: any) {
     if (error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message.includes('fetch'))) {
-      throw new Error(`Unable to connect to EduStack backend API at ${API_BASE_URL}. Please ensure the backend server is running.`);
+      // Quick retry for transient dev server module reloads
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return await executeFetch();
+      } catch (retryError: any) {
+        throw new Error(`Unable to connect to EduStack backend API at ${API_BASE_URL}. Please ensure the backend server is running.`);
+      }
     }
     throw error;
   }

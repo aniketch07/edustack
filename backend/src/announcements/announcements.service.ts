@@ -10,6 +10,7 @@ import { MEMORY_ENROLLMENTS } from '../enrollments/enrollments.service';
 import { MEMORY_LESSONS } from '../lessons/lessons.service';
 import { MEMORY_ATTENDANCE } from '../attendance/attendance.service';
 import { MEMORY_TESTS, MEMORY_QUESTIONS, MEMORY_TEST_ATTEMPTS } from '../tests/tests.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export let MEMORY_ANNOUNCEMENTS: any[] = [];
 
@@ -22,7 +23,10 @@ if (initialStore.announcements) {
 export class AnnouncementsService implements OnModuleInit {
   private readonly logger = new Logger(AnnouncementsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   onModuleInit() {
     const loaded = loadDevStore();
@@ -53,6 +57,12 @@ export class AnnouncementsService implements OnModuleInit {
         },
       });
 
+      if (courseId) {
+        this.realtime.emitToCourse(courseId, 'announcement:created', { courseId, announcement });
+      } else {
+        this.realtime.emitToInstitute(instituteId, 'announcement:created', { announcement });
+      }
+
       return {
         message: 'Announcement published successfully',
         announcement,
@@ -80,6 +90,12 @@ export class AnnouncementsService implements OnModuleInit {
 
     MEMORY_ANNOUNCEMENTS.push(newAnnouncement);
     syncAllDevStore();
+
+    if (courseId) {
+      this.realtime.emitToCourse(courseId, 'announcement:created', { courseId, announcement: newAnnouncement });
+    } else {
+      this.realtime.emitToInstitute(instituteId, 'announcement:created', { announcement: newAnnouncement });
+    }
 
     return {
       message: 'Announcement published successfully (Dev Store)',
@@ -155,6 +171,9 @@ export class AnnouncementsService implements OnModuleInit {
       MEMORY_ANNOUNCEMENTS.splice(index, 1);
       syncAllDevStore();
     }
+
+    // Realtime notification: Notify all clients to remove this announcement live
+    this.realtime.emitToInstitute(instituteId, 'announcement:deleted', { id });
 
     return { message: 'Announcement deleted successfully' };
   }

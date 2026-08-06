@@ -7,6 +7,7 @@ import { MEMORY_INSTITUTES, MEMORY_USERS } from '../institutes/institutes.servic
 import { MEMORY_COURSES } from '../courses/courses.service';
 import { MEMORY_ENROLLMENTS } from '../enrollments/enrollments.service';
 import { MEMORY_LESSONS } from '../lessons/lessons.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export let MEMORY_ATTENDANCE: any[] = [];
 
@@ -19,7 +20,10 @@ if (initialStore.attendances) {
 export class AttendanceService implements OnModuleInit {
   private readonly logger = new Logger(AttendanceService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   onModuleInit() {
     const loaded = loadDevStore();
@@ -59,6 +63,9 @@ export class AttendanceService implements OnModuleInit {
       );
 
       await this.prisma.$transaction(operations);
+
+      this.realtime.emitToCourse(courseId, 'attendance:saved', { courseId, date, count: records.length });
+
       return { message: 'Attendance marked successfully', date, count: records.length };
     } catch (error: any) {
       this.logger.warn(`Database attendance mark failed. Using dev store for course: ${courseId}`);
@@ -101,6 +108,9 @@ export class AttendanceService implements OnModuleInit {
     });
 
     syncAllDevStore();
+
+    this.realtime.emitToCourse(courseId, 'attendance:saved', { courseId, date, count: records.length });
+
     return { message: 'Attendance marked successfully (Dev Store)', date, count: records.length };
   }
 

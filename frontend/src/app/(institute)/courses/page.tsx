@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, Plus, Search, UserCheck, ArrowLeft, LogOut, CheckCircle2, Users, Image as ImageIcon } from 'lucide-react';
+import { BookOpen, Plus, Search, UserCheck, ArrowLeft, LogOut, CheckCircle2, Users, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course, UserRole } from '@/types';
 import FileUpload from '@/components/FileUpload';
 import { useToast } from '@/components/Toast';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
 
 export default function CourseManagementPage() {
   const router = useRouter();
@@ -33,6 +34,7 @@ export default function CourseManagementPage() {
   // Allocation Modal State
   const [selectedCourseForAllocation, setSelectedCourseForAllocation] = useState<Course | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [currentlyEnrolledStudentIds, setCurrentlyEnrolledStudentIds] = useState<string[]>([]);
   const [allocating, setAllocating] = useState(false);
   const [allocationSuccess, setAllocationSuccess] = useState<string | null>(null);
 
@@ -48,6 +50,26 @@ export default function CourseManagementPage() {
       fetchData();
     }
   }, [router]);
+
+  useRealtimeEvents({
+    'course:created': () => fetchData(),
+    'course:deleted': (payload: any) => {
+      if (payload?.id) {
+        setCourses((prev) => prev.filter((c) => c.id !== payload.id));
+      }
+    },
+  });
+
+  const handleDeleteCourse = async (courseId: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) return;
+    try {
+      await apiFetch(`/courses/${courseId}`, { method: 'DELETE' });
+      setCourses((prev) => prev.filter((c) => c.id !== courseId));
+      toast.success(`Course "${title}" deleted successfully!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete course.');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -116,10 +138,14 @@ export default function CourseManagementPage() {
     setAllocationSuccess(null);
     try {
       const enrollments = await apiFetch<any[]>(`/courses/${course.id}/enrollments`);
-      const enrolledIds = enrollments.map((e) => e.studentId || e.student?.id);
-      setSelectedStudentIds(enrolledIds.filter(Boolean));
+      const enrolledIds = enrollments
+        .map((e) => e.studentId || e.student?.id)
+        .filter(Boolean);
+      setSelectedStudentIds(enrolledIds);
+      setCurrentlyEnrolledStudentIds(enrolledIds);
     } catch (e) {
       setSelectedStudentIds([]);
+      setCurrentlyEnrolledStudentIds([]);
     }
   };
 
@@ -135,16 +161,30 @@ export default function CourseManagementPage() {
     setAllocationSuccess(null);
 
     try {
-      await apiFetch(`/courses/${selectedCourseForAllocation.id}/enrollments`, {
-        method: 'POST',
-        body: JSON.stringify({ studentIds: selectedStudentIds }),
-      });
+      const currentIds = new Set(currentlyEnrolledStudentIds);
+      const toAdd = selectedStudentIds.filter((id) => !currentIds.has(id));
+      const toRemove = [...currentIds].filter((id) => !selectedStudentIds.includes(id));
+
+      if (toAdd.length > 0) {
+        await apiFetch(`/courses/${selectedCourseForAllocation.id}/enrollments`, {
+          method: 'POST',
+          body: JSON.stringify({ studentIds: toAdd }),
+        });
+      }
+
+      if (toRemove.length > 0) {
+        await Promise.all(
+          toRemove.map((id) =>
+            apiFetch(`/courses/${selectedCourseForAllocation.id}/enrollments/${id}`, { method: 'DELETE' }),
+          ),
+        );
+      }
 
       setAllocationSuccess('Student course allocations updated successfully!');
       setTimeout(() => {
         setSelectedCourseForAllocation(null);
         fetchData();
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       alert(err.message || 'Failed to update student allocations.');
     } finally {
@@ -264,16 +304,32 @@ export default function CourseManagementPage() {
                       </select>
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenAllocationModal(course);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-semibold transition cursor-pointer"
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      Set Allocated Students ({course._count?.enrollments || 0})
-                    </button>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenAllocationModal(course);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-semibold transition cursor-pointer"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        Set Allocated Students ({course._count?.enrollments || 0})
+                      </button>
+
+                      {currentUser?.role === UserRole.INSTITUTE_ADMIN && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCourse(course.id, course.title);
+                          }}
+                          className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition cursor-pointer flex items-center gap-1"
+                          title="Delete Course"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

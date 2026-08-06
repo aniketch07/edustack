@@ -38,6 +38,7 @@ import { apiFetch } from '@/lib/api';
 import { User, Course, UserRole } from '@/types';
 import FileUpload from '@/components/FileUpload';
 import { useToast } from '@/components/Toast';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
 
 type TabType = 'overview' | 'lessons' | 'live-classes' | 'tests' | 'attendance';
 
@@ -238,6 +239,42 @@ export default function CourseDetailPage() {
     }
   };
 
+  // Live updates: refresh the dynamic lists the instant a lesson or test lands
+  // on this course (from this or another tab/window), no manual refresh needed.
+  const refreshCourseContent = async () => {
+    try {
+      const [lessonsData, liveData, testsData, announcementsData] = await Promise.all([
+        apiFetch<any[]>(`/courses/${courseId}/lessons`).catch(() => []),
+        apiFetch<any[]>(`/courses/${courseId}/live-classes`).catch(() => []),
+        apiFetch<any[]>(`/courses/${courseId}/tests`).catch(() => []),
+        apiFetch<any[]>(`/announcements?courseId=${courseId}`).catch(() => []),
+      ]);
+      setLessons(lessonsData);
+      setLiveClasses(liveData);
+      setTests(testsData);
+      setAnnouncements(announcementsData);
+    } catch {
+      // transient failure — keep the last known list
+    }
+  };
+
+  useRealtimeEvents({
+    'course:deleted': (payload: any) => {
+      if (payload?.id === courseId) {
+        toast.info('This course has been deleted by an administrator.');
+        router.push('/courses');
+      }
+    },
+    'lesson:created': (payload: any) => {
+      if (payload?.courseId !== courseId) return;
+      refreshCourseContent();
+    },
+    'test:published': (payload: any) => {
+      if (payload?.courseId !== courseId) return;
+      refreshCourseContent();
+    },
+  });
+
   // Load Attendance records for a specific date
   useEffect(() => {
     if (
@@ -291,12 +328,33 @@ export default function CourseDetailPage() {
   const handleSaveStudentAllocations = async () => {
     setAllocating(true);
     try {
-      await apiFetch(`/courses/${courseId}/enrollments`, {
-        method: 'POST',
-        body: JSON.stringify({ studentIds: selectedStudentIds }),
-      });
+      // Diff current enrollments against the new selection so we can both add
+      // newly-checked students AND remove students the admin unchecked. The
+      // POST /enrollments endpoint is purely additive — it never unenrolls.
+      const currentIds = new Set(
+        enrolledStudents.map((e) => e.studentId || e.student?.id).filter(Boolean),
+      );
+      const toAdd = selectedStudentIds.filter((id) => !currentIds.has(id));
+      const toRemove = [...currentIds].filter((id) => !selectedStudentIds.includes(id));
+
+      if (toAdd.length > 0) {
+        await apiFetch(`/courses/${courseId}/enrollments`, {
+          method: 'POST',
+          body: JSON.stringify({ studentIds: toAdd }),
+        });
+      }
+      await Promise.all(
+        toRemove.map((id) =>
+          apiFetch(`/courses/${courseId}/enrollments/${id}`, { method: 'DELETE' }),
+        ),
+      );
+
       const updatedEnrollments = await apiFetch<any[]>(`/courses/${courseId}/enrollments`);
       setEnrolledStudents(updatedEnrollments);
+      const enrolledIds = updatedEnrollments
+        .map((e) => e.studentId || e.student?.id)
+        .filter(Boolean);
+      setSelectedStudentIds(enrolledIds);
       setShowAllocateModal(false);
     } catch (err: any) {
       alert(err.message || 'Failed to save student allocations.');
@@ -582,6 +640,25 @@ export default function CourseDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {currentUser?.role === UserRole.INSTITUTE_ADMIN && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Are you sure you want to delete "${course.title}"? This action cannot be undone.`)) return;
+                try {
+                  await apiFetch(`/courses/${courseId}`, { method: 'DELETE' });
+                  toast.success('Course deleted successfully.');
+                  router.push('/courses');
+                } catch (err: any) {
+                  toast.error(err.message || 'Failed to delete course.');
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              title="Delete Course"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Course
+            </button>
+          )}
           <span className="px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
             <ShieldCheck className="w-3 h-3" />
             {currentUser?.role?.replace('_', ' ')}
@@ -802,16 +879,20 @@ export default function CourseDetailPage() {
               </div>
 
               {/* Course Announcements Section */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-purple-400" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
                     <h3 className="text-sm font-bold text-white">Course Announcements ({announcements.length})</h3>
                   </div>
                   {isStaff && (
                     <button
                       onClick={() => setShowPostAnnouncementModal(true)}
-                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-500/20"
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-purple-500/20"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Post Course Announcement
@@ -820,20 +901,37 @@ export default function CourseDetailPage() {
                 </div>
 
                 {announcements.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-4">
-                    No announcements published for this course yet.
-                  </p>
+                  <div className="p-8 text-center border border-dashed border-slate-800/80 rounded-xl bg-slate-950/40 space-y-1">
+                    <Sparkles className="w-8 h-8 text-slate-700 mx-auto" />
+                    <p className="text-xs font-semibold text-slate-400">No announcements published for this course yet.</p>
+                    {isStaff && (
+                      <p className="text-[11px] text-slate-500">
+                        Click &quot;Post Course Announcement&quot; to notify enrolled students.
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {announcements.map((ann) => (
-                      <div key={ann.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-white">{ann.title}</h4>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {new Date(ann.createdAt).toLocaleDateString()}
+                      <div
+                        key={ann.id}
+                        className="p-4 rounded-xl border-l-4 border-l-purple-500 border-purple-500/20 bg-gradient-to-r from-purple-950/20 via-slate-950/90 to-slate-950/90 backdrop-blur-md shadow-md space-y-2 hover:border-purple-500/40 transition-all"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="px-2.5 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-extrabold tracking-wide uppercase flex items-center gap-1">
+                            <BookOpen className="w-3 h-3 text-purple-400" />
+                            Course Notice
                           </span>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                            <Calendar className="w-3 h-3 text-slate-500" />
+                            <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-300 leading-relaxed">{ann.content}</p>
+
+                        <div>
+                          <h4 className="text-xs font-extrabold text-white tracking-wide">{ann.title}</h4>
+                          <p className="text-xs text-slate-300 mt-1 leading-relaxed">{ann.content}</p>
+                        </div>
                       </div>
                     ))}
                   </div>

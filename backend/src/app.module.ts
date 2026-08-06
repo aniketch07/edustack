@@ -13,6 +13,7 @@ import { AnnouncementsModule } from './announcements/announcements.module';
 import { LiveClassesModule } from './live-classes/live-classes.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AiModule } from './ai/ai.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { TenantContextMiddleware } from './auth/middleware/tenant-context.middleware';
 
 @Module({
@@ -34,6 +35,7 @@ import { TenantContextMiddleware } from './auth/middleware/tenant-context.middle
     LiveClassesModule,
     UploadsModule,
     AiModule,
+    RealtimeModule,
   ],
 })
 export class AppModule implements NestModule {

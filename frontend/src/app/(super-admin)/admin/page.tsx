@@ -25,6 +25,7 @@ import {
 import { getUser, removeToken, isTokenExpired } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, UserRole } from '@/types';
+import { useRealtimeEvents } from '@/hooks/useRealtimeEvents';
 
 // SVG Vector Sparkline Component for KPI Trend Cards
 function Sparkline({ data, color = '#38bdf8' }: { data: number[]; color?: string }) {
@@ -79,12 +80,26 @@ export default function SuperAdminDashboard() {
       removeToken();
       router.push('/login');
     } else if (user.role !== UserRole.SUPER_ADMIN) {
-      router.push('/login');
+      if (user.role === UserRole.INSTITUTE_ADMIN) {
+        router.push('/dashboard');
+      } else if (user.role === UserRole.TEACHER) {
+        router.push('/teacher/dashboard');
+      } else {
+        router.push('/student/dashboard');
+      }
     } else {
       setCurrentUser(user);
       fetchOverviewData();
     }
   }, [router]);
+
+  // Real-time metrics refresh on platform socket events
+  useRealtimeEvents({
+    'course:created': () => fetchOverviewData(),
+    'course:deleted': () => fetchOverviewData(),
+    'announcement:created': () => fetchOverviewData(),
+    'announcement:deleted': () => fetchOverviewData(),
+  });
 
   const fetchOverviewData = async () => {
     try {

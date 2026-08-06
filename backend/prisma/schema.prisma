@@ -192,7 +192,7 @@ model TestAttempt {
   passed      Boolean
   attemptedAt DateTime @default(now())
 
-  test    Test @relation(fields: [testId], references: [id])
+  test    Test @relation(fields: [testId], references: [id], onDelete: Cascade)
   student User @relation(fields: [studentId], references: [id])
 
   @@index([testId])
