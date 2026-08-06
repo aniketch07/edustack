@@ -36,6 +36,14 @@ export class LessonsService implements OnModuleInit {
 
   async create(courseId: string, createLessonDto: CreateLessonDto) {
     const { videoUrl, pdfUrl, order, duration } = createLessonDto;
+
+    // A lesson must contain at least one of: video lecture or PDF study notes (or both).
+    if (!videoUrl && !pdfUrl) {
+      throw new BadRequestException(
+        'A lesson needs at least one of: a video lecture or PDF study notes (or both).',
+      );
+    }
+
     const title = sanitizeText(createLessonDto.title);
     const description = sanitizeText(createLessonDto.description);
 

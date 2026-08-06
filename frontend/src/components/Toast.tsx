@@ -13,7 +13,7 @@ interface Toast {
 interface ToastContextValue {
   success: (message: string) => void;
   error: (message: string) => void;
-  info: (message: string) => void;
+  info: (message: string, duration?: number) => void;
   loading: (message: string) => number;
   dismiss: (id: number) => void;
   resolveLoading: (id: number, success: boolean, message?: string) => void;
@@ -70,7 +70,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const success = useCallback((m: string) => push('success', m), [push]);
   const error = useCallback((m: string) => push('error', m, 6000), [push]);
-  const info = useCallback((m: string) => push('info', m), [push]);
+  const info = useCallback((m: string, duration?: number) => push('info', m, duration), [push]);
   const loading = useCallback((m: string) => push('loading', m, 0), [push]);
 
   const resolveLoading = useCallback(

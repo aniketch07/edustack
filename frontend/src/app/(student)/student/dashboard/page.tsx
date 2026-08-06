@@ -6,9 +6,11 @@ import { BookOpen, Video, FileText, Calendar, LogOut, Search, UserCheck, Play, D
 import { getUser, removeToken, isTokenExpired, getToken } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
+import { useAnnouncementToasts } from '@/hooks/useAnnouncementToasts';
 
 export default function StudentDashboard() {
   const router = useRouter();
+  useAnnouncementToasts();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -762,10 +764,18 @@ export default function StudentDashboard() {
 
                           <button
                             onClick={() => router.push(`/student/tests/${test.id}`)}
-                            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                            className={`px-4 py-2 rounded-xl text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                              lastAttempt
+                                ? 'bg-slate-800 hover:bg-slate-700'
+                                : 'bg-purple-600 hover:bg-purple-500'
+                            }`}
                           >
-                            <Clock className="w-3.5 h-3.5" />
-                            {lastAttempt ? 'Retake Test' : 'Start Test'}
+                            {lastAttempt ? (
+                              <Award className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5" />
+                            )}
+                            {lastAttempt ? 'View Report' : 'Start Test'}
                           </button>
                         </div>
                       );

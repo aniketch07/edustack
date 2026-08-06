@@ -291,8 +291,7 @@ export class TestsService implements OnModuleInit {
       throw new NotFoundException(`Test with ID '${testId}' not found`);
     }
 
-    // Retake cooldown: 24 hours between attempts
-    const RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+    // One attempt per test per student — results live in the report, no retakes.
     let latestAttempt: any = null;
 
     try {
@@ -318,13 +317,9 @@ export class TestsService implements OnModuleInit {
     }
 
     if (latestAttempt) {
-      const elapsed = Date.now() - new Date(latestAttempt.attemptedAt).getTime();
-      if (elapsed < RETRY_COOLDOWN_MS) {
-        const remainingHours = Math.ceil((RETRY_COOLDOWN_MS - elapsed) / (1000 * 60 * 60));
-        throw new BadRequestException(
-          `Please wait ${remainingHours} hour(s) before retaking this test. You can retake in approximately ${remainingHours} hour(s).`,
-        );
-      }
+      throw new BadRequestException(
+        'You have already attempted this test. Your result is available in your report card.',
+      );
     }
 
     let score = 0;

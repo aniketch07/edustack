@@ -132,8 +132,11 @@ export default function StudentTestPage() {
 
       <main className="flex-1 p-4 sm:p-8 max-w-3xl w-full mx-auto">
         {testResult ? (
-          /* Scorecard */
+          /* Scorecard (report) */
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-xl space-y-6 max-w-lg mx-auto">
+            <span className="inline-block px-3 py-1 rounded-full bg-slate-950 border border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Test Report Card
+            </span>
             <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center border ${
               testResult.passed ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'
             }`}>

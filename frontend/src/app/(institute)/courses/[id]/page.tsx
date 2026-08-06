@@ -18,6 +18,7 @@ import {
   Download,
   Trash2,
   ExternalLink,
+  AlertTriangle,
   Award,
   UserCheck,
   Search,
@@ -332,6 +333,11 @@ export default function CourseDetailPage() {
   const handleAddLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lessonTitle) return;
+    // A lesson needs at least one of: video lecture or PDF study notes (or both).
+    if (!videoUrl && !pdfUrl) {
+      toast.error('Upload at least one of: video lecture or PDF study notes (or both), before publishing this lesson.');
+      return;
+    }
     setSubmittingLesson(true);
     try {
       await apiFetch(`/courses/${courseId}/lessons`, {
@@ -1465,7 +1471,7 @@ export default function CourseDetailPage() {
       {/* Add Lesson Modal */}
       {showAddLessonModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white">Add New Course Lesson</h3>
               <button onClick={() => setShowAddLessonModal(false)} className="text-slate-400 hover:text-white text-xs">
@@ -1517,9 +1523,14 @@ export default function CourseDetailPage() {
                 {pdfUrl && <p className="text-[10px] text-emerald-400 mt-1 truncate">✓ PDF uploaded successfully</p>}
               </div>
 
+              <p className="text-[11px] text-amber-400/90 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                A lesson needs at least one of: video lecture or PDF notes (or both).
+              </p>
+
               <button
                 type="submit"
-                disabled={submittingLesson}
+                disabled={submittingLesson || (!videoUrl && !pdfUrl)}
                 className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-lg shadow-blue-500/20 disabled:opacity-50"
               >
                 {submittingLesson ? 'Uploading Lesson...' : 'Save & Publish Lesson'}
@@ -1532,7 +1543,7 @@ export default function CourseDetailPage() {
       {/* Schedule Live Class Modal */}
       {showScheduleLiveModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white">Schedule Virtual Live Session</h3>
               <button onClick={() => setShowScheduleLiveModal(false)} className="text-slate-400 hover:text-white text-xs">

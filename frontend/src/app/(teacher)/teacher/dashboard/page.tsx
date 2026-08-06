@@ -8,6 +8,7 @@ import { apiFetch } from '@/lib/api';
 import { User, Course } from '@/types';
 import FileUpload from '@/components/FileUpload';
 import { useToast } from '@/components/Toast';
+import { useAnnouncementToasts } from '@/hooks/useAnnouncementToasts';
 
 interface QuestionForm {
   question: string;
@@ -19,6 +20,7 @@ interface QuestionForm {
 export default function TeacherDashboard() {
   const router = useRouter();
   const toast = useToast();
+  useAnnouncementToasts();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [assignedCourses, setAssignedCourses] = useState<Course[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -151,19 +153,62 @@ export default function TeacherDashboard() {
   const handleOpenAttendance = async (course: Course) => {
     setSelectedCourseForAttendance(course);
     setAttendanceSuccess(null);
+    // Reset stale state so the previous course's roster/records never flash on open
+    setEnrolledStudents([]);
+    setAttendanceRecords({});
     setLoadingRoster(true);
+    const dateStr = new Date().toISOString().split('T')[0];
+    setAttendanceDate(dateStr);
 
     try {
-      const data = await apiFetch<any[]>(`/courses/${course.id}/enrollments`);
-      setEnrolledStudents(data);
+      const [roster, saved] = await Promise.all([
+        apiFetch<any[]>(`/courses/${course.id}/enrollments`),
+        loadSavedAttendance(course.id, dateStr),
+      ]);
+      setEnrolledStudents(roster);
       const initialMap: { [id: string]: boolean } = {};
-      data.forEach((item) => {
+      // Pre-fill from saved attendance for this date so previously marked records show
+      saved.forEach((rec) => {
+        if (rec.studentId) initialMap[rec.studentId] = rec.isPresent;
+      });
+      // Default students with no saved record to Present
+      roster.forEach((item) => {
         const sId = item.studentId || item.student?.id || item.id;
-        initialMap[sId] = true;
+        if (initialMap[sId] === undefined) initialMap[sId] = true;
       });
       setAttendanceRecords(initialMap);
     } catch (err: any) {
       console.error('Failed to load students for attendance:', err);
+      setEnrolledStudents([]);
+    } finally {
+      setLoadingRoster(false);
+    }
+  };
+
+  const loadSavedAttendance = async (courseId: string, date: string): Promise<any[]> => {
+    try {
+      const saved = await apiFetch<any[]>(`/courses/${courseId}/attendance?date=${date}`);
+      return saved || [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleAttendanceDateChange = async (date: string) => {
+    setAttendanceDate(date);
+    if (!selectedCourseForAttendance) return;
+    setLoadingRoster(true);
+    try {
+      const saved = await loadSavedAttendance(selectedCourseForAttendance.id, date);
+      setAttendanceRecords((prev) => {
+        const next: { [id: string]: boolean } = { ...prev };
+        saved.forEach((rec) => {
+          if (rec.studentId) next[rec.studentId] = rec.isPresent;
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to load attendance for date:', err);
     } finally {
       setLoadingRoster(false);
     }
@@ -1285,13 +1330,19 @@ export default function TeacherDashboard() {
               <input
                 type="date"
                 value={attendanceDate}
-                onChange={(e) => setAttendanceDate(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                onChange={(e) => handleAttendanceDateChange(e.target.value)}
+                disabled={loadingRoster}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-500 disabled:opacity-50"
               />
             </div>
 
             <div className="flex-1 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950 divide-y divide-slate-800/60 p-2 space-y-1">
-              {enrolledStudents.length === 0 ? (
+              {loadingRoster ? (
+                <div className="p-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                  <span>Loading attendance roster...</span>
+                </div>
+              ) : enrolledStudents.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500">No students enrolled in this course.</div>
               ) : (
                 enrolledStudents.map((item: any) => {
